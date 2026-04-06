@@ -10,8 +10,8 @@ const root = path.resolve(__dirname, "..");
 
 const files = [
   { path: "package.json",                  get: (d) => d.version },
-  { path: ".claude-plugin/plugin.json",    get: (d) => (d.plugins ? d.plugins[0].version : d.version) },
-  { path: ".claude-plugin/marketplace.json", get: (d) => (d.plugins ? d.plugins[0].version : d.version) },
+  { path: ".claude-plugin/plugin.json",     get: (d) => d.version },
+  { path: ".claude-plugin/marketplace.json", get: (d) => d.plugins[0].version },
 ];
 
 const versions = [];

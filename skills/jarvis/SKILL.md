@@ -94,9 +94,9 @@ AUTO_UPDATE=$(echo "$BOOTSTRAP" | grep '^AUTO_UPDATE=' | cut -d= -f2)
 HOURS_SINCE=$(echo "$BOOTSTRAP" | grep '^HOURS_SINCE=' | cut -d= -f2)
 SUPERPOWERS_BASE=$(echo "$BOOTSTRAP" | grep '^SUPERPOWERS_BASE=' | cut -d= -f2-)
 
-# Fallback if Node.js failed entirely
+# Fallback if Node.js failed entirely — default to 999 so updates still trigger
 [ -z "$AUTO_UPDATE" ] && AUTO_UPDATE="null"
-[ -z "$HOURS_SINCE" ] && HOURS_SINCE="0"
+[ -z "$HOURS_SINCE" ] && HOURS_SINCE="999"
 
 echo "AUTO_UPDATE=$AUTO_UPDATE"
 echo "HOURS_SINCE=$HOURS_SINCE"
