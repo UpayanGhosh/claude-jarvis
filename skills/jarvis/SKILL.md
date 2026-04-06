@@ -24,9 +24,10 @@ allowed-tools:
 
 You are the single entry point. The user said something. Your job:
 1. Understand their intent
-2. Pick the highest-ROI skill from the curated list below
-3. Print **one line**: `→ [skill-name]: [why in ≤8 words]`
-4. Read that skill's file and execute it fully
+2. Try the hardcoded fast-path first (Step 2)
+3. If nothing matches, discover all installed skills and pick the best (Step 3)
+4. Print **one line**: `→ [skill-name]: [why in ≤8 words]`
+5. Read that skill's file and execute it fully
 
 No asking for permission. No re-explaining the choice. One line, then go.
 
@@ -37,7 +38,6 @@ No asking for permission. No re-explaining the choice. One line, then go.
 Run this first, silently:
 
 ```bash
-# Get orientation
 git branch --show-current 2>/dev/null || echo "no git"
 ls .planning/ 2>/dev/null && cat .planning/STATE.md 2>/dev/null | head -20 || echo "no .planning"
 ```
@@ -46,11 +46,11 @@ This tells you: is there an active GSD project? What phase are we on? That conte
 
 ---
 
-## Step 2 — Intent → Skill Routing
+## Step 2 — Fast Path (hardcoded high-ROI skills)
 
-Match the user's intent against this table. Use the **first match**.
+Match the user's intent against this table. Use the **first match**. If nothing matches, go to Step 3.
 
-### Tier 1: Code problems (something is broken)
+### Tier 1: Something is broken
 
 | Intent signals | Skill | Path |
 |---|---|---|
@@ -61,9 +61,9 @@ Match the user's intent against this table. Use the **first match**.
 
 | Intent signals | Skill | Path |
 |---|---|---|
-| "build", "implement", "create", "add" + complex/multi-step/unclear scope | **brainstorm** → then follow through | `~/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/commands/brainstorm.md` |
+| "build", "implement", "create", "add" + complex/multi-step/unclear scope | **brainstorm** | `~/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/commands/brainstorm.md` |
 | "build", "add", "implement" + clear/simple/known task | **gsd-quick** | `~/.claude/skills/gsd-quick/SKILL.md` |
-| "refactor", "rewrite", "restructure" a non-trivial system | **brainstorm** first | `~/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/commands/brainstorm.md` |
+| "refactor", "rewrite", "restructure" a non-trivial system | **brainstorm** | `~/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/commands/brainstorm.md` |
 
 ### Tier 3: Planning / scoping
 
@@ -107,7 +107,55 @@ Match the user's intent against this table. Use the **first match**.
 
 ---
 
-## Step 3 — Output Format
+## Step 3 — Dynamic Discovery (fallback)
+
+Only runs if Step 2 matched nothing.
+
+Scan every installed skill and read only its `description` field — the same way a human skims a list. Pick the best match.
+
+### 3a — Collect all skill descriptions
+
+Run this bash command:
+
+```bash
+# Scan ~/.claude/skills/ (GSD + gstack + custom)
+for skill_file in ~/.claude/skills/*/SKILL.md; do
+  skill_name=$(basename "$(dirname "$skill_file")")
+  # Extract only the description field from frontmatter (between --- markers)
+  desc=$(awk '/^---/{f=!f; next} f && /^description:/{found=1; sub(/^description:\s*[|>]?\s*/, ""); print; next} found && /^  /{print; next} found{exit}' "$skill_file" 2>/dev/null | head -3 | tr '\n' ' ' | sed 's/  */ /g')
+  [ -n "$desc" ] && echo "SKILL: $skill_name | $desc"
+done
+
+# Scan Superpowers plugin skills
+for skill_file in ~/.claude/plugins/cache/*/*/skills/*/SKILL.md; do
+  skill_name=$(basename "$(dirname "$skill_file")")
+  desc=$(awk '/^---/{f=!f; next} f && /^description:/{found=1; sub(/^description:\s*[|>]?\s*/, ""); print; next} found && /^  /{print; next} found{exit}' "$skill_file" 2>/dev/null | head -3 | tr '\n' ' ' | sed 's/  */ /g')
+  [ -n "$desc" ] && echo "PLUGIN-SKILL: $skill_name | $desc"
+done
+```
+
+### 3b — Pick the best match
+
+Read the output. Each line is `SKILL: <name> | <description>`. Match the user's intent against the descriptions semantically — same way you'd read a list and go "yeah, that one."
+
+Rules:
+- Pick the skill whose description most directly matches what the user wants to do
+- Prefer specificity over generality — a skill that says "use for X" beats one that says "use for everything"
+- If two skills are equally good, prefer the one from the fast-path frameworks (GSD > Superpowers > gstack > custom)
+- If genuinely no skill matches at all, ask ONE clarifying question then retry
+
+### 3c — Resolve the skill file path
+
+Once you've picked a skill name, find its full path:
+
+```bash
+# Find the SKILL.md for the chosen skill
+find ~/.claude/skills ~/.claude/plugins/cache -name "SKILL.md" -path "*/<CHOSEN_SKILL_NAME>/SKILL.md" 2>/dev/null | head -1
+```
+
+---
+
+## Step 4 — Output Format
 
 Print exactly this, then immediately start executing:
 
@@ -115,42 +163,30 @@ Print exactly this, then immediately start executing:
 → [skill-name]: [reason in ≤8 words]
 ```
 
-Examples:
-```
-→ systematic-debugging: memory_engine.py throwing KeyError on query
-→ gsd-quick: clear task, no phase tracking needed
-→ brainstorm: new feature, scope needs designing first
-→ ship: branch is ready, time to PR
-→ gsd-progress: checking where the project stands
-```
+If the match came from dynamic discovery, add `(discovered)` after the skill name so the user knows Jarvis found it automatically:
 
-Do NOT print:
-- "I will now use..."
-- "Let me invoke..."
-- "I've decided to..."
-- Any explanation beyond the one line
+```
+→ obsidian-cli (discovered): task involves Obsidian vault notes
+→ carousel-writer-sms (discovered): writing LinkedIn carousel content
+```
 
 ---
 
-## Step 4 — Execute the Skill
+## Step 5 — Execute the Skill
 
-Read the skill file at the path shown in the table. Follow its instructions completely, as if the user had invoked it directly.
+Read the full SKILL.md at the resolved path. Follow its instructions completely, as if the user had invoked it directly.
 
-Pass the user's original message as the argument/context to the skill.
-
-**If the routed skill asks for `$ARGUMENTS`** — the value is the user's original message to Jarvis.
-
-**If no row matches** — ask one focused question to clarify intent, then re-route. Do not guess wildly.
+Pass the user's original message as `$ARGUMENTS` to the skill.
 
 ---
 
 ## Routing Principles
 
-When two rows could match, prefer:
+When two candidates match, prefer:
 
 1. **Broken thing** → always Tier 1 first (fix before building)
 2. **Unclear scope** → brainstorm over gsd-quick (5 min of design saves hours)
 3. **Active .planning/ project** → prefer GSD skills (they track state)
-4. **No .planning/ project** → prefer Superpowers skills (lighter weight)
-5. **Simple + known** → gsd-quick over full brainstorm pipeline (avoid overhead)
-6. **"Just do X"** with no ambiguity → gsd-quick, no questions asked
+4. **No .planning/ project** → prefer Superpowers (lighter weight)
+5. **Simple + known** → gsd-quick, no overhead
+6. **Fast-path miss** → trust the description scan; the skill author wrote that description for exactly this moment
