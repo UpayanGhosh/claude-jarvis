@@ -28,12 +28,14 @@ function runSilent(cmd) {
   catch (e) { return { ok: false, out: e.message }; }
 }
 
-// ─── 1. Install jarvis SKILL.md ──────────────────────────────────────────────
+// ─── 1. Install jarvis SKILL.md + default config.json ───────────────────────
 header("Installing jarvis skill...");
 
 const src = path.join(__dirname, "skills", "jarvis", "SKILL.md");
 const skillDir = path.join(os.homedir(), ".claude", "skills", "jarvis");
 const skillDest = path.join(skillDir, "SKILL.md");
+const configPath = path.join(skillDir, "config.json");
+const logPath = path.join(skillDir, "update.log");
 
 try {
   fs.mkdirSync(skillDir, { recursive: true });
@@ -42,6 +44,25 @@ try {
 } catch (err) {
   fail(`Could not install jarvis skill: ${err.message}`);
   process.exit(1);
+}
+
+// Write default config.json using Node — no Python dependency required.
+// auto_update: null = "unset" sentinel (user hasn't been asked yet).
+// Using null instead of the string "unset" so the skill can do a proper null check.
+if (!fs.existsSync(configPath)) {
+  try {
+    fs.writeFileSync(configPath, JSON.stringify({ auto_update: null, last_check: 0 }, null, 2));
+    ok("Created default config.json");
+  } catch (err) {
+    warn(`Could not write config.json: ${err.message}`);
+  }
+} else {
+  ok("config.json already exists — skipping");
+}
+
+// Ensure log file exists so update.log is always appendable
+if (!fs.existsSync(logPath)) {
+  try { fs.writeFileSync(logPath, ""); } catch (_) {}
 }
 
 // ─── 2. Install GSD ──────────────────────────────────────────────────────────
