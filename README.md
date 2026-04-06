@@ -14,6 +14,8 @@ It did.
 
 Now I type `/jarvis I want to do this thing` and the correct workflow just... happens. I don't know which skill it used. I don't care. My job is to describe the vibe. Jarvis handles the rest.
 
+And here's the part that genuinely surprised me — it doesn't just know the skills I hardcoded. It scans every single skill installed on your machine and reads the descriptions. Like a human skimming a list. So when you install a new skill tomorrow, Jarvis already knows how to use it. You don't tell it anything. It just figures it out.
+
 I have genuinely freed up 40% of my brain for more important things. Like scrolling reels.
 
 ---
@@ -77,7 +79,20 @@ That's it. That's the whole docs. You're welcome.
 
 *(You don't need to read this. Jarvis knows. But here you go.)*
 
-Jarvis reads your current git branch and project state, then routes your intent to the best skill from three frameworks:
+Jarvis runs a two-stage routing system:
+
+**Stage 1 — Fast path.** 15 hardcoded high-ROI skills that cover 95% of what developers actually do. Instant match, zero overhead.
+
+**Stage 2 — Dynamic discovery.** If Stage 1 misses, Jarvis scans every `SKILL.md` in `~/.claude/skills/` and your installed plugins, reads only the `description` field from each one — same way a human skims a list — and picks the best match semantically. When it finds something this way it tells you:
+
+```
+→ carousel-writer-sms (discovered): writing LinkedIn carousel content
+→ obsidian-cli (discovered): task involves Obsidian vault notes
+```
+
+The `(discovered)` tag means Jarvis found it on your machine automatically. You installed a new skill yesterday and never told Jarvis? Doesn't matter. It already knows.
+
+**The hardcoded fast path covers:**
 
 | You say... | Jarvis uses... | Why |
 |---|---|---|
