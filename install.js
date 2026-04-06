@@ -25,22 +25,29 @@ if (major < 16) {
   process.exit(1);
 }
 
-// ── Run install steps ────────────────────────────────────────────────────────
+// ── Run install steps and track results ──────────────────────────────────────
 const src         = path.join(__dirname, "skills", "jarvis", "SKILL.md");
 const skillDir    = path.join(os.homedir(), ".claude", "skills", "jarvis");
 const gstackDir   = path.join(os.homedir(), ".claude", "skills", "gstack");
 const pluginsFile = path.join(os.homedir(), ".claude", "plugins", "installed_plugins.json");
 
-installSkill(src, skillDir);
-installGSD();
-installGstack(gstackDir);
-installSuperpowers(pluginsFile);
+const results = {
+  "jarvis skill": installSkill(src, skillDir),
+  "GSD":          installGSD(),
+  "gstack":       installGstack(gstackDir),
+  "Superpowers":  installSuperpowers(pluginsFile),
+};
 
-// ── Done ─────────────────────────────────────────────────────────────────────
-const RESET = "\x1b[0m";
-const GREEN = "\x1b[32m";
-const BOLD  = "\x1b[1m";
-console.log(`
+// ── Report results honestly ──────────────────────────────────────────────────
+const RESET  = "\x1b[0m";
+const GREEN  = "\x1b[32m";
+const YELLOW = "\x1b[33m";
+const BOLD   = "\x1b[1m";
+
+const failures = Object.entries(results).filter(([, ok]) => !ok).map(([name]) => name);
+
+if (failures.length === 0) {
+  console.log(`
 ${GREEN}${BOLD}All done!${RESET}
 
 Restart Claude Code, then try:
@@ -49,3 +56,17 @@ Restart Claude Code, then try:
 
 Jarvis will pick the best skill automatically.
 `);
+} else if (!results["jarvis skill"]) {
+  console.error(`
+${YELLOW}${BOLD}Install failed.${RESET} The core jarvis skill could not be installed.
+Run again or see README for manual install steps.
+`);
+  process.exit(1);
+} else {
+  console.log(`
+${YELLOW}${BOLD}Partially installed.${RESET} These failed: ${failures.join(", ")}
+
+Jarvis will still work, but some skills won't be available.
+Run ${BOLD}npm install -g claude-jarvis${RESET} again, or install the failed deps manually (see README).
+`);
+}
