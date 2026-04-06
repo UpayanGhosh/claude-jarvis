@@ -130,13 +130,16 @@ Match the user's intent against this table. First match wins. No match → go to
 | "debug", "fix", "broken", "error", "failing", "exception", "crash", "why is X not", "stopped working" | **systematic-debugging** | `~/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/skills/systematic-debugging/SKILL.md` |
 | "investigate", "root cause", "trace", "logs show", "diagnose" | **investigate** | `~/.claude/skills/investigate/SKILL.md` |
 
-### Tier 2: Building something new
+### Tier 2: Building something new (CODE/DEV ONLY)
+
+**Only match this tier if the intent is clearly about code, software, or a technical system.**
+Signals like "write a post", "create content", "write a carousel" are NOT code tasks — skip to Step 3.
 
 | Intent signals | Skill | Path |
 |---|---|---|
-| "build", "implement", "create", "add" + complex/multi-step/unclear scope | **brainstorm** | `~/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/commands/brainstorm.md` |
-| "build", "add", "implement" + clear/simple/known task | **gsd-quick** | `~/.claude/skills/gsd-quick/SKILL.md` |
-| "refactor", "rewrite", "restructure" a non-trivial system | **brainstorm** | `~/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/commands/brainstorm.md` |
+| "build", "implement", "create", "add" + **code/feature/API/endpoint/system/module/component** + complex/unclear scope | **brainstorm** | `~/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/commands/brainstorm.md` |
+| "build", "implement", "add" + **code/feature/function/script/endpoint** + clear/simple/known | **gsd-quick** | `~/.claude/skills/gsd-quick/SKILL.md` |
+| "refactor", "rewrite", "restructure" a non-trivial **codebase/system/module** | **brainstorm** | `~/.claude/plugins/cache/superpowers-dev/superpowers/5.0.7/commands/brainstorm.md` |
 
 ### Tier 3: Planning / scoping
 
