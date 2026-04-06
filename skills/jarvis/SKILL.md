@@ -38,110 +38,72 @@ No asking for permission beyond what's defined. One line, then go.
 
 ```bash
 JARVIS_DIR=~/.claude/skills/jarvis
-JARVIS_CONFIG="$JARVIS_DIR/config.json"
 JARVIS_LOG="$JARVIS_DIR/update.log"
 
-# ── Rotate log if over 1MB to prevent unbounded growth ──
+# ── Rotate log if over 1MB ──
 if [ -f "$JARVIS_LOG" ] && [ "$(wc -c < "$JARVIS_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]; then
   mv "$JARVIS_LOG" "${JARVIS_LOG}.bak" 2>/dev/null
   : > "$JARVIS_LOG"
 fi
 
-# ── Resolve Python binary ──
-# Probes with a real import to skip Microsoft Store stubs and broken installs.
-PYTHON_BIN=""
-for candidate in python3 python python3.exe python.exe; do
-  if "$candidate" -c "import json, time, os, sys; sys.exit(0)" 2>/dev/null; then
-    PYTHON_BIN="$candidate"
-    break
-  fi
-done
+# ── Single Node.js call for all bootstrap work ──
+# Node is guaranteed (this is an npm package). No Python dependency.
+BOOTSTRAP=$(node -e "
+var fs=require('fs'),path=require('path'),os=require('os');
 
-# ── Resolve Superpowers base path — portable sort (no GNU sort -V required) ──
-# Uses Python to sort semantically if available, otherwise falls back to lexical sort.
-if [ -n "$PYTHON_BIN" ]; then
-  SUPERPOWERS_BASE=$("$PYTHON_BIN" -c "
-import os, re
-base = os.path.expanduser('~/.claude/plugins/cache/superpowers-dev/superpowers')
-if not os.path.isdir(base):
-    print('')
-else:
-    dirs = [d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d))]
-    def ver_key(v):
-        return [int(x) if x.isdigit() else x for x in re.split(r'[.\-]', v)]
-    dirs.sort(key=ver_key)
-    print(os.path.join(base, dirs[-1]) if dirs else '')
-" 2>>"$JARVIS_LOG")
-else
-  # Fallback: lexical sort — good enough for semver with zero-padded segments
-  SUPERPOWERS_BASE=$(find ~/.claude/plugins/cache/superpowers-dev/superpowers \
-    -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort | tail -1)
-fi
+// Read and coerce config
+var configPath=path.join(os.homedir(),'.claude','skills','jarvis','config.json');
+var config={auto_update:null,last_check:0};
+try{config=JSON.parse(fs.readFileSync(configPath,'utf8'));}catch(e){}
 
-# ── Read and validate config ──
-# All type coercion happens here so downstream logic only sees clean values.
-if [ -n "$PYTHON_BIN" ] && [ -f "$JARVIS_CONFIG" ]; then
-  CONFIG_OUT=$("$PYTHON_BIN" -c "
-import json, sys
+var au='null';
+if(config.auto_update===true)au='true';
+else if(config.auto_update===false)au='false';
+else if(config.auto_update!==null)au='null';
 
-try:
-    with open('$JARVIS_CONFIG') as f:
-        d = json.load(f)
-except (json.JSONDecodeError, IOError) as e:
-    # Corrupted or unreadable config — treat as fresh install
-    print('auto_update=null')
-    print('last_check=0')
-    sys.exit(0)
+var lc=0;
+if(typeof config.last_check==='number'&&config.last_check>=0)lc=Math.floor(config.last_check);
 
-# Coerce auto_update: accept bool, null, or string variants
-raw = d.get('auto_update', None)
-if raw is None:
-    au = 'null'
-elif isinstance(raw, bool):
-    au = 'true' if raw else 'false'
-elif isinstance(raw, str) and raw.lower() in ('true', 'yes', '1'):
-    au = 'true'
-elif isinstance(raw, str) and raw.lower() in ('false', 'no', '0'):
-    au = 'false'
-else:
-    au = 'null'
+// Resolve Superpowers path with proper numeric semver sort
+var spBase='';
+var spDir=path.join(os.homedir(),'.claude','plugins','cache','superpowers-dev','superpowers');
+try{
+  var dirs=fs.readdirSync(spDir).filter(function(d){return fs.statSync(path.join(spDir,d)).isDirectory();});
+  dirs.sort(function(a,b){
+    var pa=a.split(/[.-]/).map(function(x){return parseInt(x)||0;});
+    var pb=b.split(/[.-]/).map(function(x){return parseInt(x)||0;});
+    for(var i=0;i<Math.max(pa.length,pb.length);i++){
+      if((pa[i]||0)!==(pb[i]||0))return(pa[i]||0)-(pb[i]||0);
+    }
+    return 0;
+  });
+  if(dirs.length)spBase=path.join(spDir,dirs[dirs.length-1]);
+}catch(e){}
 
-# Coerce last_check: must be a non-negative integer
-try:
-    lc = max(0, int(d.get('last_check', 0)))
-except (TypeError, ValueError):
-    lc = 0
+// Timestamp — always works, no Python needed
+var now=Math.floor(Date.now()/1000);
+var hoursSince=lc>0?Math.max(0,Math.floor((now-lc)/3600)):999;
 
-print('auto_update=' + au)
-print('last_check=' + str(lc))
+console.log('AUTO_UPDATE='+au);
+console.log('HOURS_SINCE='+hoursSince);
+console.log('SUPERPOWERS_BASE='+spBase);
 " 2>>"$JARVIS_LOG")
 
-  AUTO_UPDATE=$(echo "$CONFIG_OUT" | grep '^auto_update=' | cut -d= -f2)
-  LAST_CHECK=$(echo "$CONFIG_OUT"  | grep '^last_check='  | cut -d= -f2)
-  # Guard: if parsing produced empty strings, default safely
-  [ -z "$AUTO_UPDATE" ] && AUTO_UPDATE="null"
-  [ -z "$LAST_CHECK"  ] && LAST_CHECK="0"
-else
-  AUTO_UPDATE="null"
-  LAST_CHECK="0"
-fi
+# Parse output
+AUTO_UPDATE=$(echo "$BOOTSTRAP" | grep '^AUTO_UPDATE=' | cut -d= -f2)
+HOURS_SINCE=$(echo "$BOOTSTRAP" | grep '^HOURS_SINCE=' | cut -d= -f2)
+SUPERPOWERS_BASE=$(echo "$BOOTSTRAP" | grep '^SUPERPOWERS_BASE=' | cut -d= -f2-)
 
-# ── Portable current timestamp via Python ──
-if [ -n "$PYTHON_BIN" ]; then
-  NOW=$("$PYTHON_BIN" -c "import time; print(int(time.time()))" 2>/dev/null || echo "0")
-else
-  NOW="0"
-fi
-
-HOURS_SINCE=$(( (NOW - LAST_CHECK) / 3600 ))
+# Fallback if Node.js failed entirely
+[ -z "$AUTO_UPDATE" ] && AUTO_UPDATE="null"
+[ -z "$HOURS_SINCE" ] && HOURS_SINCE="0"
 
 echo "AUTO_UPDATE=$AUTO_UPDATE"
 echo "HOURS_SINCE=$HOURS_SINCE"
 echo "SUPERPOWERS_BASE=$SUPERPOWERS_BASE"
-echo "PYTHON_BIN=$PYTHON_BIN"
 ```
 
-> Capture the output. You will use `AUTO_UPDATE`, `HOURS_SINCE`, `SUPERPOWERS_BASE`, and `PYTHON_BIN` in the blocks below.
+> Capture the output. You will use `AUTO_UPDATE`, `HOURS_SINCE`, and `SUPERPOWERS_BASE` in the blocks below.
 
 ---
 
@@ -154,43 +116,17 @@ Ask the user once using AskUserQuestion:
 Set `USER_ANSWER` to the user's response, then run:
 
 ```bash
-JARVIS_CONFIG=~/.claude/skills/jarvis/config.json
-JARVIS_LOG=~/.claude/skills/jarvis/update.log
-
-# Re-resolve Python in this shell context
-PYTHON_BIN=""
-for candidate in python3 python python3.exe python.exe; do
-  if "$candidate" -c "import json, time, os, sys; sys.exit(0)" 2>/dev/null; then
-    PYTHON_BIN="$candidate"
-    break
-  fi
-done
-
-# Determine boolean value from user answer using Python — no shell grep logic
-# USER_ANSWER is exported so Python reads it via os.environ (no injection risk)
+# USER_ANSWER is exported so Node reads it via process.env
 export USER_ANSWER
 
-if [ -n "$PYTHON_BIN" ]; then
-  "$PYTHON_BIN" -c "
-import json, os
-answer = os.environ.get('USER_ANSWER', '').lower()
-val = 'yes' in answer or answer.startswith('y')
-config = {'auto_update': val, 'last_check': 0}
-with open(os.path.expanduser('$JARVIS_CONFIG'), 'w') as f:
-    json.dump(config, f, indent=2)
-" 2>>"$JARVIS_LOG"
-else
-  # Python unavailable — use Node (always present since jarvis is an npm package)
-  node --input-type=module <<'EOF' 2>>"$JARVIS_LOG"
-import { writeFileSync } from 'fs';
-import { homedir } from 'os';
-import { join } from 'path';
-const answer = (process.env.USER_ANSWER || '').toLowerCase();
-const val = answer.includes('yes') || answer.startsWith('y');
-const p = join(homedir(), '.claude', 'skills', 'jarvis', 'config.json');
-writeFileSync(p, JSON.stringify({ auto_update: val, last_check: 0 }, null, 2));
-EOF
-fi
+node -e "
+var fs=require('fs'),path=require('path'),os=require('os');
+var answer=(process.env.USER_ANSWER||'').toLowerCase();
+var val=answer.indexOf('yes')!==-1||answer.charAt(0)==='y';
+var config={auto_update:val,last_check:0};
+var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');
+fs.writeFileSync(p,JSON.stringify(config,null,2));
+" 2>>~/.claude/skills/jarvis/update.log
 ```
 
 ---
@@ -198,31 +134,35 @@ fi
 ### 0b — If `AUTO_UPDATE` is `"true"` AND `HOURS_SINCE` ≥ 24
 
 ```bash
-JARVIS_CONFIG=~/.claude/skills/jarvis/config.json
 JARVIS_LOG=~/.claude/skills/jarvis/update.log
-
-# Re-resolve Python in this shell context
-PYTHON_BIN=""
-for candidate in python3 python python3.exe python.exe; do
-  if "$candidate" -c "import json, time, os, sys; sys.exit(0)" 2>/dev/null; then
-    PYTHON_BIN="$candidate"
-    break
-  fi
-done
-
 UPDATED_LIST=""
+
+# ── Node.js semver comparison helper ──
+# Returns "yes" if $2 is strictly newer than $1, "no" otherwise.
+# Handles pre-release tags correctly (strips them for core comparison).
+_semver_newer() {
+  node -e "
+    var p=function(v){return v.replace(/^[^0-9]*/,'').split(/[.-]/).map(function(x){return parseInt(x)||0;});};
+    var a=p(process.argv[1]),b=p(process.argv[2]);
+    for(var i=0;i<Math.max(a.length,b.length);i++){
+      if((b[i]||0)>(a[i]||0)){process.stdout.write('yes');process.exit();}
+      if((b[i]||0)<(a[i]||0)){process.stdout.write('no');process.exit();}
+    }
+    process.stdout.write('no');
+  " "$1" "$2" 2>/dev/null
+}
 
 # Update jarvis itself
 JARVIS_LATEST=$(npm show claude-jarvis version 2>>"$JARVIS_LOG" || true)
-JARVIS_CURRENT=$(npm list -g claude-jarvis --depth=0 2>>"$JARVIS_LOG" | grep claude-jarvis | grep -o '[0-9]*\.[0-9]*\.[0-9]*' || true)
-if [ -n "$JARVIS_LATEST" ] && [ -n "$JARVIS_CURRENT" ] && [ "$JARVIS_LATEST" != "$JARVIS_CURRENT" ]; then
+JARVIS_CURRENT=$(npm list -g claude-jarvis --depth=0 2>>"$JARVIS_LOG" | grep -o 'claude-jarvis@[^ ]*' | grep -o '@.*' | tr -d '@' || true)
+if [ -n "$JARVIS_LATEST" ] && [ -n "$JARVIS_CURRENT" ] && [ "$(_semver_newer "$JARVIS_CURRENT" "$JARVIS_LATEST")" = "yes" ]; then
   npm install -g claude-jarvis 2>>"$JARVIS_LOG" && UPDATED_LIST="$UPDATED_LIST claude-jarvis"
 fi
 
 # Update GSD
 GSD_LATEST=$(npm show get-shit-done version 2>>"$JARVIS_LOG" || true)
-GSD_CURRENT=$(npm list -g get-shit-done --depth=0 2>>"$JARVIS_LOG" | grep get-shit-done | grep -o '[0-9]*\.[0-9]*\.[0-9]*' || true)
-if [ -n "$GSD_LATEST" ] && [ -n "$GSD_CURRENT" ] && [ "$GSD_LATEST" != "$GSD_CURRENT" ]; then
+GSD_CURRENT=$(npm list -g get-shit-done --depth=0 2>>"$JARVIS_LOG" | grep -o 'get-shit-done@[^ ]*' | grep -o '@.*' | tr -d '@' || true)
+if [ -n "$GSD_LATEST" ] && [ -n "$GSD_CURRENT" ] && [ "$(_semver_newer "$GSD_CURRENT" "$GSD_LATEST")" = "yes" ]; then
   npm install -g get-shit-done 2>>"$JARVIS_LOG" && UPDATED_LIST="$UPDATED_LIST GSD"
 fi
 
@@ -235,21 +175,15 @@ if [ -d ~/.claude/skills/gstack/.git ]; then
     && UPDATED_LIST="$UPDATED_LIST gstack" || true
 fi
 
-# Stamp last check time
-if [ -n "$PYTHON_BIN" ]; then
-  "$PYTHON_BIN" -c "
-import json, time, os
-p = os.path.expanduser('$JARVIS_CONFIG')
-try:
-    with open(p) as f:
-        config = json.load(f)
-except:
-    config = {}
-config['last_check'] = int(time.time())
-with open(p, 'w') as f:
-    json.dump(config, f, indent=2)
+# Stamp last check time — preserves auto_update on error (no bare except: losing keys)
+node -e "
+var fs=require('fs'),path=require('path'),os=require('os');
+var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');
+var config;
+try{config=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){config={auto_update:null,last_check:0};}
+config.last_check=Math.floor(Date.now()/1000);
+fs.writeFileSync(p,JSON.stringify(config,null,2));
 " 2>>"$JARVIS_LOG"
-fi
 
 [ -n "$UPDATED_LIST" ] && echo "↑ updated:$UPDATED_LIST — you're welcome."
 ```
