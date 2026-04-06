@@ -125,14 +125,22 @@ This is peak laziness. I'm proud of us.
 
 ---
 
+## Built with Synapse
+
+Jarvis was built while working on **[Synapse-OSS](https://github.com/UpayanGhosh/Synapse-OSS)** — an open-source AI personal assistant that evolves with you. Every instance becomes a unique, self-evolving architecture shaped entirely by the person it serves. Persistent memory, hybrid RAG, soul-brain sync, knowledge graph, multi-channel (WhatsApp, Telegram, Discord). The kind of AI assistant that actually knows you.
+
+If you like the vibe of Jarvis, you'll like Synapse. Go check it out.
+
+---
+
 ## Requirements
 
-Just Claude Code. The install script handles GSD and Superpowers automatically.
+Just Claude Code. The install script handles GSD, gstack, and Superpowers automatically.
 
 If something didn't install, manually:
 - **GSD**: `npm install -g get-shit-done`
+- **gstack**: `git clone --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack && cd ~/.claude/skills/gstack && ./setup`
 - **Superpowers**: `claude plugin marketplace add obra/superpowers` then `claude plugin install superpowers@superpowers-dev`
-- **gstack**: [gstack.dev](https://gstack.dev)
 
 ---
 
