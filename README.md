@@ -1,5 +1,8 @@
 # claude-jarvis
 
+[![CI](https://github.com/UpayanGhosh/claude-jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/UpayanGhosh/claude-jarvis/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/claude-jarvis)](https://www.npmjs.com/package/claude-jarvis)
+
 > I was too lazy to pick an AI skill. So I built an AI skill that picks AI skills for me.
 
 Hi. I'm a lazy developer.
@@ -151,7 +154,10 @@ If you like the vibe of Jarvis, you'll like Synapse. Go check it out.
 
 ## Requirements
 
-Just Claude Code. The install script handles GSD, gstack, and Superpowers automatically.
+- **Node.js >= 16** (the only hard dependency)
+- **Claude Code** (obviously)
+
+No Python required. The install script handles GSD, gstack, and Superpowers automatically. If anything fails, it tells you exactly what didn't work instead of pretending everything is fine.
 
 If something didn't install, manually:
 - **GSD**: `npm install -g get-shit-done`
@@ -165,6 +171,17 @@ If something didn't install, manually:
 Found a routing case that Jarvis handles wrong? Open an issue or a PR. Describe the intent you typed and which skill it should have picked.
 
 Please don't open issues saying "can you add support for X skill." Yes I can. I am, in fact, not lazy when it comes to this specific project because it directly enables my laziness everywhere else. It's a net positive.
+
+### Development
+
+```bash
+git clone https://github.com/UpayanGhosh/claude-jarvis.git
+cd claude-jarvis
+npm install
+npm test          # 22 tests, ~0.3s
+```
+
+CI runs on every push: Node 18/20/22 test matrix + cross-platform syntax checks on Windows, macOS, and Linux.
 
 ---
 
