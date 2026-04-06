@@ -16,6 +16,8 @@ Now I type `/jarvis I want to do this thing` and the correct workflow just... ha
 
 And here's the part that genuinely surprised me — it doesn't just know the skills I hardcoded. It scans every single skill installed on your machine and reads the descriptions. Like a human skimming a list. So when you install a new skill tomorrow, Jarvis already knows how to use it. You don't tell it anything. It just figures it out.
 
+It also keeps itself updated. First time you run it, it asks if you want auto-updates. You say yes. It silently updates itself, GSD, Superpowers, and gstack every 24 hours without you thinking about it ever again. The only thing it can't do is scroll reels for you. Working on it.
+
 I have genuinely freed up 40% of my brain for more important things. Like scrolling reels.
 
 ---
@@ -26,23 +28,22 @@ You tell it what you want in plain English. It reads your project state, figures
 
 ```
 /jarvis I want to add rate limiting to the API
-→ brainstorm: new feature, scope needs designing first
-[full Superpowers design → plan → execute pipeline kicks in]
+→ brainstorm: new feature, scope needs designing first — a feature! wild. let me guess, you thought of this at 11pm.
 
 /jarvis why is memory_engine crashing on startup
-→ systematic-debugging: exception on startup, root cause first
-[4-phase root cause investigation, no random guessing]
+→ systematic-debugging: exception on startup, root cause first — bold move not reading the error message. let's see.
 
 /jarvis ship this
-→ ship: branch ready, creating PR
-[tests, diff review, VERSION bump, PR — done]
+→ ship: branch ready, creating PR — either it works or you'll be back in 10 minutes. let's go.
 
 /jarvis where are we
-→ gsd-progress: checking project state
-[full milestone status, what's done, what's next]
+→ gsd-progress: checking project state — let's see how far we've gotten while you were watching reels.
+
+/jarvis write a LinkedIn carousel about my project
+→ carousel-writer-sms (discovered): writing LinkedIn carousel content — found something you didn't even know you had. you're welcome.
 ```
 
-That's the whole interface. One command. Infinite skills.
+That's the whole interface. One command. Infinite skills. With light mockery included at no extra charge.
 
 ---
 
