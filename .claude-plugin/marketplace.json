@@ -2,18 +2,16 @@
   "name": "claude-jarvis",
   "description": "Universal intent router — one command for all Claude Code skills",
   "owner": {
-    "name": "Upayan Saha",
-    "email": ""
+    "name": "Upayan Ghosh"
   },
   "plugins": [
     {
       "name": "jarvis",
       "description": "Universal intent router for Claude Code. One command that picks the highest-ROI skill automatically — GSD, Superpowers, or gstack.",
-      "version": "1.0.0",
+      "version": "1.2.4",
       "source": "./",
       "author": {
-        "name": "Upayan Saha",
-        "email": ""
+        "name": "Upayan Ghosh"
       }
     }
   ]
