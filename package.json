@@ -13,10 +13,10 @@
     "ai",
     "routing"
   ],
-  "homepage": "https://github.com/upayansaha/claude-jarvis",
+  "homepage": "https://github.com/UpayanGhosh/claude-jarvis",
   "repository": {
     "type": "git",
-    "url": "https://github.com/upayansaha/claude-jarvis.git"
+    "url": "https://github.com/UpayanGhosh/claude-jarvis.git"
   },
   "author": "Upayan Saha",
   "license": "MIT",

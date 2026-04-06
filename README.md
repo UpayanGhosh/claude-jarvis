@@ -57,8 +57,8 @@ Restart Claude Code. Done. Go back to your reels.
 ### Alternatively, via Claude plugin system
 
 ```bash
-claude plugin marketplace add upayansaha/claude-jarvis
-claude plugin install jarvis@upayansaha
+claude plugin marketplace add UpayanGhosh/claude-jarvis
+claude plugin install jarvis@UpayanGhosh
 ```
 
 ---
