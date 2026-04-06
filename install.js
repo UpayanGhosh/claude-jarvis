@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Postinstall: installs jarvis skill + all dependencies (GSD, Superpowers)
+// Postinstall: installs jarvis skill + all dependencies (GSD, Superpowers, gstack)
 
 const fs = require("fs");
 const path = require("path");
@@ -61,7 +61,40 @@ if (gsdCheck.ok) {
   }
 }
 
-// ─── 3. Install Superpowers ──────────────────────────────────────────────────
+// ─── 3. Install gstack ───────────────────────────────────────────────────────
+header("Checking gstack...");
+
+const gstackDir = path.join(os.homedir(), ".claude", "skills", "gstack");
+const gstackExists = fs.existsSync(path.join(gstackDir, "setup"));
+
+if (gstackExists) {
+  ok("gstack already installed");
+} else {
+  const gitCheck = runSilent("git --version");
+  if (!gitCheck.ok) {
+    warn("git not found — skipping gstack install");
+    info("Install git first, then run: git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack && cd ~/.claude/skills/gstack && ./setup");
+  } else {
+    info("Cloning gstack...");
+    const cloneResult = runSilent(
+      `git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "${gstackDir}"`
+    );
+    if (!cloneResult.ok) {
+      warn("gstack clone failed — try manually:");
+      info(`git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack`);
+    } else {
+      info("Running gstack setup...");
+      const setupResult = runSilent(`cd "${gstackDir}" && ./setup`);
+      if (setupResult.ok) {
+        ok("gstack installed");
+      } else {
+        warn("gstack setup failed — try manually: cd ~/.claude/skills/gstack && ./setup");
+      }
+    }
+  }
+}
+
+// ─── 4. Install Superpowers ──────────────────────────────────────────────────
 header("Checking Superpowers...");
 
 const claudeCheck = runSilent("claude --version");
