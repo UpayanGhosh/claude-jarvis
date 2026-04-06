@@ -1,0 +1,13 @@
+{
+  "name": "jarvis",
+  "description": "Universal intent router for Claude Code. One command that picks the highest-ROI skill automatically — GSD, Superpowers, or gstack.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Upayan Saha",
+    "email": ""
+  },
+  "homepage": "https://github.com/upayansaha/claude-jarvis",
+  "repository": "https://github.com/upayansaha/claude-jarvis",
+  "license": "MIT",
+  "keywords": ["skills", "routing", "gsd", "superpowers", "productivity", "orchestration"]
+}

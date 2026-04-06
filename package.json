@@ -1,0 +1,31 @@
+{
+  "name": "claude-jarvis",
+  "version": "1.0.0",
+  "description": "Universal intent router for Claude Code — one command that picks the highest-ROI skill automatically",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "claude-plugin",
+    "skill",
+    "gsd",
+    "superpowers",
+    "productivity",
+    "ai",
+    "routing"
+  ],
+  "homepage": "https://github.com/upayansaha/claude-jarvis",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/upayansaha/claude-jarvis.git"
+  },
+  "author": "Upayan Saha",
+  "license": "MIT",
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "skills/",
+    ".claude-plugin/",
+    "install.js"
+  ]
+}
