@@ -41,9 +41,24 @@ Run this silently every invocation:
 ```bash
 JARVIS_CONFIG=~/.claude/skills/jarvis/config.json
 
-# Read config
-AUTO_UPDATE=$(python3 -c "import json,sys; d=json.load(open('$JARVIS_CONFIG')); print(d.get('auto_update','unset'))" 2>/dev/null || echo "unset")
-LAST_CHECK=$(python3 -c "import json,sys; d=json.load(open('$JARVIS_CONFIG')); print(d.get('last_check','0'))" 2>/dev/null || echo "0")
+# Resolve python binary (python3 may be a Microsoft Store stub on Windows)
+PYTHON_BIN=""
+for candidate in python3 python python3.exe python.exe; do
+  if $candidate -c "import sys; sys.exit(0)" 2>/dev/null; then
+    PYTHON_BIN="$candidate"
+    break
+  fi
+done
+
+# Read config — only if file exists and python is available
+if [ -n "$PYTHON_BIN" ] && [ -f "$JARVIS_CONFIG" ]; then
+  AUTO_UPDATE=$($PYTHON_BIN -c "import json; d=json.load(open('$JARVIS_CONFIG')); print(d.get('auto_update','unset'))" 2>/dev/null || echo "unset")
+  LAST_CHECK=$($PYTHON_BIN -c "import json; d=json.load(open('$JARVIS_CONFIG')); print(d.get('last_check','0'))" 2>/dev/null || echo "0")
+else
+  AUTO_UPDATE="unset"
+  LAST_CHECK="0"
+fi
+
 NOW=$(date +%s)
 HOURS_SINCE=$(( (NOW - LAST_CHECK) / 3600 ))
 
@@ -60,7 +75,7 @@ Ask the user once using AskUserQuestion:
 Save the answer:
 ```bash
 mkdir -p ~/.claude/skills/jarvis
-python3 -c "
+$PYTHON_BIN -c "
 import json, time
 config = {'auto_update': True if 'Yes' in '''ANSWER''' else False, 'last_check': 0}
 json.dump(config, open('$JARVIS_CONFIG', 'w'))
@@ -89,7 +104,7 @@ claude plugin update superpowers 2>/dev/null && echo "UPDATED: Superpowers"
 [ -d ~/.claude/skills/gstack/.git ] && cd ~/.claude/skills/gstack && git pull --quiet 2>/dev/null && ./setup --quiet 2>/dev/null && echo "UPDATED: gstack"
 
 # Stamp last check time
-python3 -c "
+$PYTHON_BIN -c "
 import json, time
 try:
     config = json.load(open('$JARVIS_CONFIG'))
