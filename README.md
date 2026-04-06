@@ -1,85 +1,149 @@
 # claude-jarvis
 
-> The only Claude Code skill you need to remember.
+> I was too lazy to pick an AI skill. So I built an AI skill that picks AI skills for me.
 
-**Jarvis** is a universal intent router. You describe what you want in plain English — it picks the highest-ROI skill from GSD, Superpowers, and gstack, tells you what it chose in one line, and executes it.
+Hi. I'm a lazy developer.
+
+Not "I don't feel like writing tests today" lazy. I mean *pathologically, clinically, aggressively* lazy. I'm so lazy I have a keyboard shortcut to close tabs I don't want to read. I'm so lazy I automated my standup. I'm so lazy that when someone told me there were 50+ Claude Code skills available across GSD, Superpowers, and gstack — skills that could 10x my productivity — my first thought was:
+
+**"That's too many things to remember."**
+
+So I did what any self-respecting lazy developer would do. I asked Claude to figure it out for me. I said: *"Build me one single skill that understands what I want and picks the best skill automatically."*
+
+It did.
+
+Now I type `/jarvis I want to do this thing` and the correct workflow just... happens. I don't know which skill it used. I don't care. My job is to describe the vibe. Jarvis handles the rest.
+
+I have genuinely freed up 40% of my brain for more important things. Like scrolling reels.
+
+---
+
+## What Jarvis Does
+
+You tell it what you want in plain English. It reads your project state, figures out the highest-ROI skill from 50+ options across three frameworks, tells you what it picked in one line, and executes it.
 
 ```
 /jarvis I want to add rate limiting to the API
 → brainstorm: new feature, scope needs designing first
-[executes Superpowers brainstorm → plan → subagent pipeline]
+[full Superpowers design → plan → execute pipeline kicks in]
 
 /jarvis why is memory_engine crashing on startup
 → systematic-debugging: exception on startup, root cause first
-[executes 4-phase systematic debugging protocol]
+[4-phase root cause investigation, no random guessing]
 
 /jarvis ship this
 → ship: branch ready, creating PR
-[executes gstack ship workflow]
+[tests, diff review, VERSION bump, PR — done]
+
+/jarvis where are we
+→ gsd-progress: checking project state
+[full milestone status, what's done, what's next]
 ```
+
+That's the whole interface. One command. Infinite skills.
+
+---
 
 ## Install
 
-### Via npm (any machine)
+One command. It auto-installs GSD and Superpowers for you too, because obviously you're not going to do that yourself.
 
 ```bash
 npm install -g claude-jarvis
 ```
 
-Copies the skill to `~/.claude/skills/jarvis/`. Restart Claude Code, done.
+Restart Claude Code. Done. Go back to your reels.
 
-### Via Claude plugin system
+### Alternatively, via Claude plugin system
 
 ```bash
 claude plugin marketplace add upayansaha/claude-jarvis
 claude plugin install jarvis@upayansaha
 ```
 
+---
+
 ## Usage
 
 ```
-/jarvis <anything you want to do>
+/jarvis <describe what you want like a normal human being>
 ```
 
-That's it. One command. Jarvis handles the rest.
+That's it. That's the whole docs. You're welcome.
 
-## What it routes to
+---
 
-| Your intent | Skill invoked |
-|---|---|
-| Something broken / error / failing | `systematic-debugging` (Superpowers) |
-| Investigate / trace / diagnose | `investigate` (gstack) |
-| Build something complex or unclear | `brainstorm` → full Superpowers pipeline |
-| Build something simple / known | `gsd-quick` |
-| Plan a feature or architecture | `brainstorm` |
-| Add / plan / execute a GSD phase | GSD phase skills |
-| Run all phases autonomously | `gsd-autonomous` |
-| Write tests / TDD | `test-driven-development` (Superpowers) |
-| Ship / PR / deploy | `ship` (gstack) |
-| Code review | `review` (gstack) |
-| Verify "is this done?" | `verification-before-completion` (Superpowers) |
-| Project status / where are we | `gsd-progress` |
-| Browse / test the UI | `browse` / `qa` (gstack) |
-| Code quality check | `health` (gstack) |
+## What's Happening Under the Hood
+
+*(You don't need to read this. Jarvis knows. But here you go.)*
+
+Jarvis reads your current git branch and project state, then routes your intent to the best skill from three frameworks:
+
+| You say... | Jarvis uses... | Why |
+|---|---|---|
+| Something is broken / error / crash | `systematic-debugging` (Superpowers) | 4-phase root cause. No random fixes. |
+| I need to investigate / trace something | `investigate` (gstack) | Deep diagnosis with logs |
+| Build something new, scope unclear | `brainstorm` → full Superpowers pipeline | Design spec before code. Prevents rework. |
+| Build something quick and obvious | `gsd-quick` | No ceremony. Just do it. |
+| Plan a feature or architecture | `brainstorm` | Think before typing |
+| Add / plan / run a phase | GSD phase skills | Tracked, resumable, stateful |
+| Run everything automatically | `gsd-autonomous` | Walk away. Come back to shipped code. |
+| Write tests | `test-driven-development` (Superpowers) | RED before GREEN. Iron law. |
+| Ship / PR / push | `ship` (gstack) | Tests → review → bump → PR |
+| Code review | `review` (gstack) | Diff review before merge |
+| Is this actually done? | `verification-before-completion` (Superpowers) | Evidence before claims |
+| Where are we in the project? | `gsd-progress` | Full milestone status |
+| Test the UI / browse a URL | `browse` / `qa` (gstack) | Headless browser QA |
+| Code quality check | `health` (gstack) | Lint, types, dead code |
+
+**How it decides when two skills could match:**
+1. Something is broken → fix first, always
+2. Scope is unclear → design before coding
+3. Active `.planning/` directory → GSD (stateful)
+4. No project structure → Superpowers (lightweight)
+5. Task is simple and obvious → `gsd-quick`, no overhead
+
+---
+
+## For the 10x Lazier Developer
+
+Look. You installed this because you're lazy. I respect that. We're the same.
+
+But I want you to understand the full magnitude of what you've done. You now have:
+
+- **GSD** — a project orchestration system that manages your entire roadmap, tracks every decision, runs phases in parallel, and remembers everything between sessions. Built by people who think "good enough" is a character flaw.
+- **Superpowers** — an engineering discipline framework that enforces TDD, catches bugs before they compound, runs two-stage code reviews after every task, and physically blocks you from claiming something is done without proof. Built by people who apparently have never cut a corner in their life.
+- **gstack** — a full browser automation, QA, shipping, and monitoring toolkit. Built by people who automate things other people don't even realize can be automated.
+
+Three of the most powerful AI developer frameworks in existence.
+
+And you interact with all of them by typing what you want like you're texting a friend.
+
+You are now a 10x developer. Not because you work harder. Because you were too lazy to work harder and just automated the thinking part.
+
+This is peak laziness. I'm proud of us.
+
+---
 
 ## Requirements
 
-Jarvis routes to skills from three systems. Install what you use:
+Just Claude Code. The install script handles GSD and Superpowers automatically.
 
-- **GSD** — [get-shit-done](https://github.com/gsd-cli/get-shit-done)
-- **Superpowers** — `claude plugin install superpowers@superpowers-dev` (after `claude plugin marketplace add obra/superpowers`)
-- **gstack** — [gstack.dev](https://gstack.dev)
+If something didn't install, manually:
+- **GSD**: `npm install -g get-shit-done`
+- **Superpowers**: `claude plugin marketplace add obra/superpowers` then `claude plugin install superpowers@superpowers-dev`
+- **gstack**: [gstack.dev](https://gstack.dev)
 
-Jarvis works even if you only have one of these installed — it routes to what's available.
+---
 
-## How it decides
+## Contributing
 
-1. Broken thing → always fix first (`systematic-debugging`)
-2. Unclear scope → `brainstorm` over quick execution
-3. Active `.planning/` project → prefer GSD (tracks state)
-4. No `.planning/` → prefer Superpowers (lighter weight)
-5. Simple + known → `gsd-quick`, no overhead
+Found a routing case that Jarvis handles wrong? Open an issue or a PR. Describe the intent you typed and which skill it should have picked.
+
+Please don't open issues saying "can you add support for X skill." Yes I can. I am, in fact, not lazy when it comes to this specific project because it directly enables my laziness everywhere else. It's a net positive.
+
+---
 
 ## License
 
-MIT
+MIT. Do whatever. I'm not going to read the PR anyway — Jarvis will review it.
