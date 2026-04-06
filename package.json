@@ -21,7 +21,7 @@
   "bugs": {
     "url": "https://github.com/UpayanGhosh/claude-jarvis/issues"
   },
-  "author": "Upayan Saha",
+  "author": "Upayan Ghosh",
   "license": "MIT",
   "engines": {
     "node": ">=16.0.0"

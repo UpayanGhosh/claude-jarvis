@@ -1,218 +1,45 @@
 #!/usr/bin/env node
 // Postinstall: installs jarvis skill + all dependencies (GSD, Superpowers, gstack)
 
-const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
-const { spawnSync } = require("child_process");
 
-// ── Guard: only run when installed directly or globally, not as a transitive dep ──
-// npm sets npm_config_global=true for -g installs.
-// INIT_CWD matches __dirname when installed directly (not as a dep of another package).
+const {
+  installSkill,
+  installGSD,
+  installGstack,
+  installSuperpowers,
+} = require("./lib/installer");
+
+// ── Guard: only run when installed directly or globally ──────────────────────
 const isGlobal = process.env.npm_config_global === "true";
 const isDirect = process.env.INIT_CWD && process.env.INIT_CWD === path.dirname(__dirname);
 if (!isGlobal && !isDirect) {
   process.exit(0);
 }
 
-// ── Node version guard ──
-const [major, minor] = process.versions.node.split(".").map(Number);
-if (major < 10 || (major === 10 && minor < 12)) {
-  console.error(`\x1b[31m✗\x1b[0m jarvis requires Node.js >= 10.12.0 (you have ${process.versions.node})`);
+// ── Node version guard ───────────────────────────────────────────────────────
+const [major] = process.versions.node.split(".").map(Number);
+if (major < 16) {
+  console.error(`\x1b[31m✗\x1b[0m jarvis requires Node.js >= 16.0.0 (you have ${process.versions.node})`);
   process.exit(1);
 }
 
+// ── Run install steps ────────────────────────────────────────────────────────
+const src         = path.join(__dirname, "skills", "jarvis", "SKILL.md");
+const skillDir    = path.join(os.homedir(), ".claude", "skills", "jarvis");
+const gstackDir   = path.join(os.homedir(), ".claude", "skills", "gstack");
+const pluginsFile = path.join(os.homedir(), ".claude", "plugins", "installed_plugins.json");
+
+installSkill(src, skillDir);
+installGSD();
+installGstack(gstackDir);
+installSuperpowers(pluginsFile);
+
+// ── Done ─────────────────────────────────────────────────────────────────────
 const RESET = "\x1b[0m";
 const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const RED = "\x1b[31m";
-const BOLD = "\x1b[1m";
-const DIM = "\x1b[2m";
-
-function ok(msg)     { console.log(`${GREEN}✓${RESET} ${msg}`); }
-function warn(msg)   { console.log(`${YELLOW}⚠${RESET}  ${msg}`); }
-function fail(msg)   { console.log(`${RED}✗${RESET} ${msg}`); }
-function info(msg)   { console.log(`${DIM}  ${msg}${RESET}`); }
-function header(msg) { console.log(`\n${BOLD}${msg}${RESET}`); }
-
-// Runs a command silently, returns { ok, out }.
-// Uses spawnSync with shell:true so it works on Windows (cmd.exe) and Unix alike.
-function runSilent(cmd, opts = {}) {
-  const result = spawnSync(cmd, [], {
-    shell: true,
-    encoding: "utf8",
-    ...opts,
-  });
-  if (result.error || result.status !== 0) {
-    return { ok: false, out: (result.stderr || result.error?.message || "").trim() };
-  }
-  return { ok: true, out: (result.stdout || "").trim() };
-}
-
-// Runs a command in a specific directory without relying on shell cd.
-function runInDir(cmd, cwd) {
-  const result = spawnSync(cmd, [], {
-    shell: true,
-    encoding: "utf8",
-    cwd,
-  });
-  if (result.error || result.status !== 0) {
-    return { ok: false, out: (result.stderr || result.error?.message || "").trim() };
-  }
-  return { ok: true, out: (result.stdout || "").trim() };
-}
-
-// ─── 1. Install jarvis SKILL.md + bootstrap files ────────────────────────────
-header("Installing jarvis skill...");
-
-const src      = path.join(__dirname, "skills", "jarvis", "SKILL.md");
-const skillDir = path.join(os.homedir(), ".claude", "skills", "jarvis");
-const skillDest = path.join(skillDir, "SKILL.md");
-const configPath = path.join(skillDir, "config.json");
-const logPath    = path.join(skillDir, "update.log");
-
-try {
-  fs.mkdirSync(skillDir, { recursive: true });
-  fs.copyFileSync(src, skillDest);
-  ok(`jarvis skill → ${skillDest}`);
-} catch (err) {
-  fail(`Could not install jarvis skill: ${err.message}`);
-  process.exit(1);
-}
-
-// Write default config.json using Node — no Python dependency.
-// auto_update: null = unset sentinel. Using null (not the string "unset")
-// so the skill can do a strict null check without string comparison.
-if (!fs.existsSync(configPath)) {
-  try {
-    fs.writeFileSync(configPath, JSON.stringify({ auto_update: null, last_check: 0 }, null, 2));
-    ok("Created default config.json");
-  } catch (err) {
-    warn(`Could not write config.json: ${err.message}`);
-  }
-} else {
-  // Validate existing config — repair if corrupted
-  try {
-    const existing = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    const valid =
-      (existing.auto_update === null || typeof existing.auto_update === "boolean") &&
-      typeof existing.last_check === "number";
-    if (!valid) {
-      fs.writeFileSync(configPath, JSON.stringify({ auto_update: null, last_check: 0 }, null, 2));
-      warn("config.json had invalid values — reset to defaults");
-    } else {
-      ok("config.json already exists and is valid");
-    }
-  } catch (_) {
-    // Unreadable / corrupt JSON — overwrite
-    try {
-      fs.writeFileSync(configPath, JSON.stringify({ auto_update: null, last_check: 0 }, null, 2));
-      warn("config.json was corrupted — reset to defaults");
-    } catch (err) {
-      warn(`Could not repair config.json: ${err.message}`);
-    }
-  }
-}
-
-// Ensure update.log exists and is appendable
-if (!fs.existsSync(logPath)) {
-  try { fs.writeFileSync(logPath, ""); } catch (_) {}
-}
-
-// ─── 2. Install GSD ──────────────────────────────────────────────────────────
-header("Checking GSD (Get Shit Done)...");
-
-const gsdCheck = runSilent("gsd --version");
-if (gsdCheck.ok) {
-  ok(`GSD already installed (${gsdCheck.out})`);
-} else {
-  info("Installing GSD via npm...");
-  const gsdInstall = runSilent("npm install -g get-shit-done");
-  if (gsdInstall.ok) {
-    ok("GSD installed");
-  } else {
-    warn("GSD install failed — try manually: npm install -g get-shit-done");
-    info(gsdInstall.out.split("\n")[0]);
-  }
-}
-
-// ─── 3. Install gstack ───────────────────────────────────────────────────────
-header("Checking gstack...");
-
-const gstackDir    = path.join(os.homedir(), ".claude", "skills", "gstack");
-const gstackExists = fs.existsSync(path.join(gstackDir, "setup"));
-
-if (gstackExists) {
-  ok("gstack already installed");
-} else {
-  const gitCheck = runSilent("git --version");
-  if (!gitCheck.ok) {
-    warn("git not found — skipping gstack install");
-    info(`Install git first, then run:`);
-    info(`  git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "${gstackDir}"`);
-    info(`  cd "${gstackDir}" && ./setup`);
-  } else {
-    info("Cloning gstack...");
-    // Use spawnSync with cwd instead of shell cd — works on Windows and Unix
-    const cloneResult = runSilent(
-      `git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "${gstackDir}"`
-    );
-    if (!cloneResult.ok) {
-      warn("gstack clone failed — try manually:");
-      info(`  git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "${gstackDir}"`);
-      info(cloneResult.out.split("\n")[0]);
-    } else {
-      info("Running gstack setup...");
-      // runInDir uses cwd parameter — no shell cd, no cwd pollution, works cross-platform
-      const setupResult = runInDir("./setup", gstackDir);
-      if (setupResult.ok) {
-        ok("gstack installed");
-      } else {
-        warn(`gstack setup failed — try manually: cd "${gstackDir}" && ./setup`);
-        info(setupResult.out.split("\n")[0]);
-      }
-    }
-  }
-}
-
-// ─── 4. Install Superpowers ──────────────────────────────────────────────────
-header("Checking Superpowers...");
-
-const claudeCheck = runSilent("claude --version");
-if (!claudeCheck.ok) {
-  warn("Claude Code CLI not found — skipping Superpowers install");
-  info("Install Claude Code first: https://claude.ai/code");
-} else {
-  const pluginsFile = path.join(os.homedir(), ".claude", "plugins", "installed_plugins.json");
-  let alreadyInstalled = false;
-
-  try {
-    const plugins = JSON.parse(fs.readFileSync(pluginsFile, "utf8"));
-    alreadyInstalled = Object.keys(plugins.plugins || {}).some(k => k.startsWith("superpowers"));
-  } catch (_) {}
-
-  if (alreadyInstalled) {
-    ok("Superpowers already installed");
-  } else {
-    info("Registering obra/superpowers marketplace...");
-    const mktAdd = runSilent("claude plugin marketplace add obra/superpowers");
-    if (!mktAdd.ok) {
-      warn("Could not register marketplace — may already exist");
-    }
-
-    info("Installing Superpowers plugin...");
-    const spInstall = runSilent("claude plugin install superpowers@superpowers-dev");
-    if (spInstall.ok) {
-      ok("Superpowers installed");
-    } else {
-      warn("Superpowers install failed — try manually:");
-      info("  claude plugin marketplace add obra/superpowers");
-      info("  claude plugin install superpowers@superpowers-dev");
-    }
-  }
-}
-
-// ─── Done ────────────────────────────────────────────────────────────────────
+const BOLD  = "\x1b[1m";
 console.log(`
 ${GREEN}${BOLD}All done!${RESET}
 
