@@ -23,7 +23,7 @@ allowed-tools:
 # Jarvis — Universal Skill Router
 
 You are the single entry point. The user said something. Your job:
-1. Run the auto-update check (Step 0)
+1. Run the bootstrap block (Step 0)
 2. Understand their intent
 3. Try the hardcoded fast-path (Step 2)
 4. If nothing matches, discover all installed skills (Step 3)
@@ -34,52 +34,99 @@ No asking for permission beyond what's defined. One line, then go.
 
 ---
 
-## Step 0 — Auto-Update Check
-
-Run this entire block as a single bash invocation:
+## Step 0 — Bootstrap (run as a single bash block)
 
 ```bash
 JARVIS_DIR=~/.claude/skills/jarvis
 JARVIS_CONFIG="$JARVIS_DIR/config.json"
 JARVIS_LOG="$JARVIS_DIR/update.log"
 
-# ── Resolve Superpowers base path dynamically (fix: never hardcode version) ──
-SUPERPOWERS_BASE=$(find ~/.claude/plugins/cache/superpowers-dev/superpowers -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort -V | tail -1)
+# ── Rotate log if over 1MB to prevent unbounded growth ──
+if [ -f "$JARVIS_LOG" ] && [ "$(wc -c < "$JARVIS_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]; then
+  mv "$JARVIS_LOG" "${JARVIS_LOG}.bak" 2>/dev/null
+  : > "$JARVIS_LOG"
+fi
 
-# ── Resolve Python binary (fix: Windows Store stub exits non-zero without running) ──
+# ── Resolve Python binary ──
+# Probes with a real import to skip Microsoft Store stubs and broken installs.
 PYTHON_BIN=""
 for candidate in python3 python python3.exe python.exe; do
-  if "$candidate" -c "import sys; sys.exit(0)" 2>/dev/null; then
+  if "$candidate" -c "import json, time, os, sys; sys.exit(0)" 2>/dev/null; then
     PYTHON_BIN="$candidate"
     break
   fi
 done
 
-# ── Read config — guard: file must exist AND python must be available ──
+# ── Resolve Superpowers base path — portable sort (no GNU sort -V required) ──
+# Uses Python to sort semantically if available, otherwise falls back to lexical sort.
+if [ -n "$PYTHON_BIN" ]; then
+  SUPERPOWERS_BASE=$("$PYTHON_BIN" -c "
+import os, re
+base = os.path.expanduser('~/.claude/plugins/cache/superpowers-dev/superpowers')
+if not os.path.isdir(base):
+    print('')
+else:
+    dirs = [d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d))]
+    def ver_key(v):
+        return [int(x) if x.isdigit() else x for x in re.split(r'[.\-]', v)]
+    dirs.sort(key=ver_key)
+    print(os.path.join(base, dirs[-1]) if dirs else '')
+" 2>>"$JARVIS_LOG")
+else
+  # Fallback: lexical sort — good enough for semver with zero-padded segments
+  SUPERPOWERS_BASE=$(find ~/.claude/plugins/cache/superpowers-dev/superpowers \
+    -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sort | tail -1)
+fi
+
+# ── Read and validate config ──
+# All type coercion happens here so downstream logic only sees clean values.
 if [ -n "$PYTHON_BIN" ] && [ -f "$JARVIS_CONFIG" ]; then
-  AUTO_UPDATE=$("$PYTHON_BIN" -c "
+  CONFIG_OUT=$("$PYTHON_BIN" -c "
 import json, sys
+
 try:
-    d = json.load(open('$JARVIS_CONFIG'))
-    v = d.get('auto_update', None)
-    print('null' if v is None else str(v).lower())
-except Exception as e:
-    print('null')
-" 2>>"$JARVIS_LOG")
-  LAST_CHECK=$("$PYTHON_BIN" -c "
-import json
+    with open('$JARVIS_CONFIG') as f:
+        d = json.load(f)
+except (json.JSONDecodeError, IOError) as e:
+    # Corrupted or unreadable config — treat as fresh install
+    print('auto_update=null')
+    print('last_check=0')
+    sys.exit(0)
+
+# Coerce auto_update: accept bool, null, or string variants
+raw = d.get('auto_update', None)
+if raw is None:
+    au = 'null'
+elif isinstance(raw, bool):
+    au = 'true' if raw else 'false'
+elif isinstance(raw, str) and raw.lower() in ('true', 'yes', '1'):
+    au = 'true'
+elif isinstance(raw, str) and raw.lower() in ('false', 'no', '0'):
+    au = 'false'
+else:
+    au = 'null'
+
+# Coerce last_check: must be a non-negative integer
 try:
-    d = json.load(open('$JARVIS_CONFIG'))
-    print(d.get('last_check', 0))
-except:
-    print(0)
+    lc = max(0, int(d.get('last_check', 0)))
+except (TypeError, ValueError):
+    lc = 0
+
+print('auto_update=' + au)
+print('last_check=' + str(lc))
 " 2>>"$JARVIS_LOG")
+
+  AUTO_UPDATE=$(echo "$CONFIG_OUT" | grep '^auto_update=' | cut -d= -f2)
+  LAST_CHECK=$(echo "$CONFIG_OUT"  | grep '^last_check='  | cut -d= -f2)
+  # Guard: if parsing produced empty strings, default safely
+  [ -z "$AUTO_UPDATE" ] && AUTO_UPDATE="null"
+  [ -z "$LAST_CHECK"  ] && LAST_CHECK="0"
 else
   AUTO_UPDATE="null"
   LAST_CHECK="0"
 fi
 
-# ── Portable timestamp via Python (fix: date +%s is not portable on all systems) ──
+# ── Portable current timestamp via Python ──
 if [ -n "$PYTHON_BIN" ]; then
   NOW=$("$PYTHON_BIN" -c "import time; print(int(time.time()))" 2>/dev/null || echo "0")
 else
@@ -88,67 +135,76 @@ fi
 
 HOURS_SINCE=$(( (NOW - LAST_CHECK) / 3600 ))
 
-echo "AUTO_UPDATE: $AUTO_UPDATE"
-echo "HOURS_SINCE_CHECK: $HOURS_SINCE"
-echo "SUPERPOWERS_BASE: $SUPERPOWERS_BASE"
-echo "PYTHON_BIN: $PYTHON_BIN"
+echo "AUTO_UPDATE=$AUTO_UPDATE"
+echo "HOURS_SINCE=$HOURS_SINCE"
+echo "SUPERPOWERS_BASE=$SUPERPOWERS_BASE"
+echo "PYTHON_BIN=$PYTHON_BIN"
 ```
 
-> Save the values of `SUPERPOWERS_BASE` and `PYTHON_BIN` from this output — you will need them in Steps 2 and 0c.
+> Capture the output. You will use `AUTO_UPDATE`, `HOURS_SINCE`, `SUPERPOWERS_BASE`, and `PYTHON_BIN` in the blocks below.
 
-### If `AUTO_UPDATE` is `"null"` (first time ever):
+---
+
+### 0a — If `AUTO_UPDATE` is `"null"` (first time ever)
 
 Ask the user once using AskUserQuestion:
 - Question: "Want Jarvis to keep itself, GSD, Superpowers, and gstack automatically up to date?"
 - Options: `["Yes, always auto-update", "No thanks, I'll update manually"]`
 
-Then run this block (fix: answer passed as env var, not string interpolation — no injection risk):
+Set `USER_ANSWER` to the user's response, then run:
 
 ```bash
 JARVIS_CONFIG=~/.claude/skills/jarvis/config.json
 JARVIS_LOG=~/.claude/skills/jarvis/update.log
 
-# Resolve python again in this shell context
+# Re-resolve Python in this shell context
 PYTHON_BIN=""
 for candidate in python3 python python3.exe python.exe; do
-  if "$candidate" -c "import sys; sys.exit(0)" 2>/dev/null; then
+  if "$candidate" -c "import json, time, os, sys; sys.exit(0)" 2>/dev/null; then
     PYTHON_BIN="$candidate"
     break
   fi
 done
 
-# USER_ANSWER must be set to the user's response before running this block
-# e.g. USER_ANSWER="Yes, always auto-update"
-AUTO_UPDATE_VAL=$(echo "$USER_ANSWER" | grep -qi "yes" && echo "true" || echo "false")
+# Determine boolean value from user answer using Python — no shell grep logic
+# USER_ANSWER is exported so Python reads it via os.environ (no injection risk)
+export USER_ANSWER
 
 if [ -n "$PYTHON_BIN" ]; then
-  AUTO_UPDATE_VAL="$AUTO_UPDATE_VAL" "$PYTHON_BIN" -c "
-import json, os, time
-val = os.environ.get('AUTO_UPDATE_VAL', 'false') == 'true'
+  "$PYTHON_BIN" -c "
+import json, os
+answer = os.environ.get('USER_ANSWER', '').lower()
+val = 'yes' in answer or answer.startswith('y')
 config = {'auto_update': val, 'last_check': 0}
-json.dump(config, open('$JARVIS_CONFIG', 'w'), indent=2)
+with open(os.path.expanduser('$JARVIS_CONFIG'), 'w') as f:
+    json.dump(config, f, indent=2)
 " 2>>"$JARVIS_LOG"
 else
-  # Python unavailable — write config via node as fallback
-  node -e "
-const val = process.env.AUTO_UPDATE_VAL === 'true';
-require('fs').writeFileSync('$JARVIS_CONFIG', JSON.stringify({auto_update: val, last_check: 0}, null, 2));
-" 2>>"$JARVIS_LOG"
+  # Python unavailable — use Node (always present since jarvis is an npm package)
+  node --input-type=module <<'EOF' 2>>"$JARVIS_LOG"
+import { writeFileSync } from 'fs';
+import { homedir } from 'os';
+import { join } from 'path';
+const answer = (process.env.USER_ANSWER || '').toLowerCase();
+const val = answer.includes('yes') || answer.startsWith('y');
+const p = join(homedir(), '.claude', 'skills', 'jarvis', 'config.json');
+writeFileSync(p, JSON.stringify({ auto_update: val, last_check: 0 }, null, 2));
+EOF
 fi
 ```
 
-### If `AUTO_UPDATE` is `"true"` AND `HOURS_SINCE_CHECK` ≥ 24:
+---
 
-Run this block. Errors are logged to `~/.claude/skills/jarvis/update.log`, never swallowed silently:
+### 0b — If `AUTO_UPDATE` is `"true"` AND `HOURS_SINCE` ≥ 24
 
 ```bash
 JARVIS_CONFIG=~/.claude/skills/jarvis/config.json
 JARVIS_LOG=~/.claude/skills/jarvis/update.log
 
-# Resolve python again in this shell context
+# Re-resolve Python in this shell context
 PYTHON_BIN=""
 for candidate in python3 python python3.exe python.exe; do
-  if "$candidate" -c "import sys; sys.exit(0)" 2>/dev/null; then
+  if "$candidate" -c "import json, time, os, sys; sys.exit(0)" 2>/dev/null; then
     PYTHON_BIN="$candidate"
     break
   fi
@@ -156,90 +212,89 @@ done
 
 UPDATED_LIST=""
 
-# Update jarvis itself via npm
-JARVIS_LATEST=$(npm show claude-jarvis version 2>>"$JARVIS_LOG")
-JARVIS_CURRENT=$(npm list -g claude-jarvis --depth=0 2>>"$JARVIS_LOG" | grep claude-jarvis | grep -o '[0-9]*\.[0-9]*\.[0-9]*')
-if [ -n "$JARVIS_LATEST" ] && [ "$JARVIS_LATEST" != "$JARVIS_CURRENT" ]; then
+# Update jarvis itself
+JARVIS_LATEST=$(npm show claude-jarvis version 2>>"$JARVIS_LOG" || true)
+JARVIS_CURRENT=$(npm list -g claude-jarvis --depth=0 2>>"$JARVIS_LOG" | grep claude-jarvis | grep -o '[0-9]*\.[0-9]*\.[0-9]*' || true)
+if [ -n "$JARVIS_LATEST" ] && [ -n "$JARVIS_CURRENT" ] && [ "$JARVIS_LATEST" != "$JARVIS_CURRENT" ]; then
   npm install -g claude-jarvis 2>>"$JARVIS_LOG" && UPDATED_LIST="$UPDATED_LIST claude-jarvis"
 fi
 
-# Update GSD via npm
-GSD_LATEST=$(npm show get-shit-done version 2>>"$JARVIS_LOG")
-GSD_CURRENT=$(npm list -g get-shit-done --depth=0 2>>"$JARVIS_LOG" | grep get-shit-done | grep -o '[0-9]*\.[0-9]*\.[0-9]*')
-if [ -n "$GSD_LATEST" ] && [ "$GSD_LATEST" != "$GSD_CURRENT" ]; then
+# Update GSD
+GSD_LATEST=$(npm show get-shit-done version 2>>"$JARVIS_LOG" || true)
+GSD_CURRENT=$(npm list -g get-shit-done --depth=0 2>>"$JARVIS_LOG" | grep get-shit-done | grep -o '[0-9]*\.[0-9]*\.[0-9]*' || true)
+if [ -n "$GSD_LATEST" ] && [ -n "$GSD_CURRENT" ] && [ "$GSD_LATEST" != "$GSD_CURRENT" ]; then
   npm install -g get-shit-done 2>>"$JARVIS_LOG" && UPDATED_LIST="$UPDATED_LIST GSD"
 fi
 
-# Update Superpowers via claude plugin
-claude plugin update superpowers 2>>"$JARVIS_LOG" && UPDATED_LIST="$UPDATED_LIST Superpowers"
+# Update Superpowers
+claude plugin update superpowers 2>>"$JARVIS_LOG" && UPDATED_LIST="$UPDATED_LIST Superpowers" || true
 
-# Update gstack — fix: explicit subshell so cd doesn't pollute working directory
+# Update gstack — explicit subshell, cwd never leaks
 if [ -d ~/.claude/skills/gstack/.git ]; then
   (cd ~/.claude/skills/gstack && git pull --quiet 2>>"$JARVIS_LOG" && ./setup --quiet 2>>"$JARVIS_LOG") \
-    && UPDATED_LIST="$UPDATED_LIST gstack"
+    && UPDATED_LIST="$UPDATED_LIST gstack" || true
 fi
 
-# Stamp last check time using portable Python timestamp
+# Stamp last check time
 if [ -n "$PYTHON_BIN" ]; then
   "$PYTHON_BIN" -c "
-import json, time
+import json, time, os
+p = os.path.expanduser('$JARVIS_CONFIG')
 try:
-    config = json.load(open('$JARVIS_CONFIG'))
+    with open(p) as f:
+        config = json.load(f)
 except:
     config = {}
 config['last_check'] = int(time.time())
-json.dump(config, open('$JARVIS_CONFIG', 'w'), indent=2)
+with open(p, 'w') as f:
+    json.dump(config, f, indent=2)
 " 2>>"$JARVIS_LOG"
 fi
 
 [ -n "$UPDATED_LIST" ] && echo "↑ updated:$UPDATED_LIST — you're welcome."
 ```
 
-### If `AUTO_UPDATE` is `"false"` OR `HOURS_SINCE_CHECK` < 24:
+### 0c — If `AUTO_UPDATE` is `"false"` OR `HOURS_SINCE` < 24
 Skip entirely. Move to Step 1.
 
 ---
 
 ## Step 1 — Read Context
 
-Run silently:
-
 ```bash
 git branch --show-current 2>/dev/null || echo "no git"
-ls .planning/ 2>/dev/null && cat .planning/STATE.md 2>/dev/null | head -20 || echo "no .planning"
+[ -d .planning ] && head -20 .planning/STATE.md 2>/dev/null || echo "no .planning"
 ```
 
 ---
 
-## Step 2 — Fast Path (hardcoded high-ROI skills)
+## Step 2 — Fast Path
 
-Use `$SUPERPOWERS_BASE` resolved in Step 0 for all Superpowers paths.
-If `$SUPERPOWERS_BASE` is empty (Superpowers not installed), skip those rows and fall through to Step 3.
+Use `$SUPERPOWERS_BASE` from Step 0 for all Superpowers paths.
+If `$SUPERPOWERS_BASE` is empty, skip every row that uses it and fall through to Step 3.
 
-Match the user's intent against this table. **Conflict rule: Tier 1 always beats all other tiers. When Tier 2 and Tier 3 both match, check for a code/system qualifier — present → Tier 2, absent → Tier 3.**
+**Conflict rules (apply before matching):**
+- Tier 1 always wins over all other tiers — evaluate it first, always
+- Tier 2 vs Tier 3 conflict: code/system/technical qualifier present → Tier 2; absent → Tier 3
+- "fix the tests" → Tier 1 wins (fix signal), not Tier 4
+- "create a plan" → Tier 3 (no code qualifier), not Tier 2
 
-First match within a tier wins. No match → go to Step 3.
-
-### Tier 1: Something is broken
-*(Tier 1 wins over all other tiers — check this first, always)*
+### Tier 1 — Something is broken *(always checked first)*
 
 | Intent signals | Skill | Path |
 |---|---|---|
 | "debug", "fix", "broken", "error", "failing", "exception", "crash", "why is X not", "stopped working" | **systematic-debugging** | `$SUPERPOWERS_BASE/skills/systematic-debugging/SKILL.md` |
 | "investigate", "root cause", "trace", "logs show", "diagnose" | **investigate** | `~/.claude/skills/investigate/SKILL.md` |
 
-### Tier 2: Building something new (CODE/DEV ONLY)
-
-**Only match this tier if the intent is clearly about code, software, or a technical system.**
-Signals like "write a post", "create content", "write a carousel" are NOT code tasks — skip to Step 3.
+### Tier 2 — Building something new *(code/technical context required)*
 
 | Intent signals | Skill | Path |
 |---|---|---|
-| "build", "implement", "create", "add" + **code/feature/API/endpoint/system/module/component** + complex/unclear scope | **brainstorm** | `$SUPERPOWERS_BASE/commands/brainstorm.md` |
-| "build", "implement", "add" + **code/feature/function/script/endpoint** + clear/simple/known | **gsd-quick** | `~/.claude/skills/gsd-quick/SKILL.md` |
-| "refactor", "rewrite", "restructure" a non-trivial **codebase/system/module** | **brainstorm** | `$SUPERPOWERS_BASE/commands/brainstorm.md` |
+| "build", "implement", "create", "add" + code/feature/API/endpoint/system/module/component + complex/unclear scope | **brainstorm** | `$SUPERPOWERS_BASE/commands/brainstorm.md` |
+| "build", "implement", "add" + code/feature/function/script/endpoint + clear/simple/known | **gsd-quick** | `~/.claude/skills/gsd-quick/SKILL.md` |
+| "refactor", "rewrite", "restructure" a non-trivial codebase/system/module | **brainstorm** | `$SUPERPOWERS_BASE/commands/brainstorm.md` |
 
-### Tier 3: Planning / scoping
+### Tier 3 — Planning / scoping
 
 | Intent signals | Skill | Path |
 |---|---|---|
@@ -247,7 +302,7 @@ Signals like "write a post", "create content", "write a carousel" are NOT code t
 | "add a phase", "new phase", "next phase", "track this as a phase" | **gsd-add-phase** | `~/.claude/skills/gsd-add-phase/SKILL.md` |
 | "plan this phase", "make a plan for" (phase already exists) | **gsd-plan-phase** | `~/.claude/skills/gsd-plan-phase/SKILL.md` |
 
-### Tier 4: Execution
+### Tier 4 — Execution
 
 | Intent signals | Skill | Path |
 |---|---|---|
@@ -255,7 +310,7 @@ Signals like "write a post", "create content", "write a carousel" are NOT code t
 | "run all phases", "do everything", "autonomous", "just do it all" | **gsd-autonomous** | `~/.claude/skills/gsd-autonomous/SKILL.md` |
 | "write tests", "add tests", "test coverage", "TDD" | **test-driven-development** | `$SUPERPOWERS_BASE/skills/test-driven-development/SKILL.md` |
 
-### Tier 5: Shipping / review
+### Tier 5 — Shipping / review
 
 | Intent signals | Skill | Path |
 |---|---|---|
@@ -263,7 +318,7 @@ Signals like "write a post", "create content", "write a carousel" are NOT code t
 | "review", "code review", "check my code", "audit this diff" | **review** | `~/.claude/skills/review/SKILL.md` |
 | "verify", "is this done", "check if it works", "validate" | **verification-before-completion** | `$SUPERPOWERS_BASE/skills/verification-before-completion/SKILL.md` |
 
-### Tier 6: Project status / navigation
+### Tier 6 — Project status / navigation
 
 | Intent signals | Skill | Path |
 |---|---|---|
@@ -272,7 +327,7 @@ Signals like "write a post", "create content", "write a carousel" are NOT code t
 | "new project", "start from scratch", "initialize project" | **gsd-new-project** | `~/.claude/skills/gsd-new-project/SKILL.md` |
 | "health", "quality", "linting", "code quality check" | **health** | `~/.claude/skills/health/SKILL.md` |
 
-### Tier 7: Web / browsing
+### Tier 7 — Web / browsing
 
 | Intent signals | Skill | Path |
 |---|---|---|
@@ -286,25 +341,32 @@ Signals like "write a post", "create content", "write a carousel" are NOT code t
 Only runs if Step 2 matched nothing.
 
 ```bash
-# Scan ~/.claude/skills/ (GSD + gstack + custom)
+# Depth-limited scan to prevent hangs on deep trees or symlink loops
 for skill_file in ~/.claude/skills/*/SKILL.md; do
+  [ -f "$skill_file" ] || continue
   skill_name=$(basename "$(dirname "$skill_file")")
   desc=$(awk '/^---/{f=!f; next} f && /^description:/{found=1; sub(/^description:\s*[|>]?\s*/, ""); print; next} found && /^  /{print; next} found{exit}' "$skill_file" 2>/dev/null | head -3 | tr '\n' ' ' | sed 's/  */ /g')
   [ -n "$desc" ] && echo "SKILL: $skill_name | $desc"
 done
 
-# Scan plugin skills
 for skill_file in ~/.claude/plugins/cache/*/*/skills/*/SKILL.md; do
+  [ -f "$skill_file" ] || continue
   skill_name=$(basename "$(dirname "$skill_file")")
   desc=$(awk '/^---/{f=!f; next} f && /^description:/{found=1; sub(/^description:\s*[|>]?\s*/, ""); print; next} found && /^  /{print; next} found{exit}' "$skill_file" 2>/dev/null | head -3 | tr '\n' ' ' | sed 's/  */ /g')
   [ -n "$desc" ] && echo "PLUGIN-SKILL: $skill_name | $desc"
 done
 ```
 
-Pick the skill whose description best matches the intent. Find its path:
+If the scan returns zero results, tell the user:
+> "No skills found. Make sure GSD, gstack, or Superpowers are installed. Run: `npm install -g claude-jarvis` to reinstall."
+Then stop — do not attempt to route.
+
+If results are returned, pick the skill whose description best matches the intent:
 
 ```bash
-find ~/.claude/skills ~/.claude/plugins/cache -name "SKILL.md" -path "*/<CHOSEN_SKILL_NAME>/SKILL.md" 2>/dev/null | head -1
+# Depth-limited find to prevent hangs
+find ~/.claude/skills ~/.claude/plugins/cache -maxdepth 6 -name "SKILL.md" \
+  -path "*/<CHOSEN_SKILL_NAME>/SKILL.md" 2>/dev/null | head -1
 ```
 
 ---
@@ -327,8 +389,6 @@ If discovered dynamically, add `(discovered)`:
 ## The Mock — Jarvis Personality
 
 Every routing line ends with a friendly roast after the em dash. Be specific to what they asked, not generic. Think: a friend who thinks you're ridiculous for needing this and loves you for it.
-
-**By category:**
 
 **Debugging / fixing:**
 - "too lazy to read the stack trace yourself? same honestly."
@@ -373,36 +433,38 @@ Every routing line ends with a friendly roast after the em dash. Be specific to 
 - "found something you didn't even know you had. you're welcome."
 - "this one was hiding in your skills folder. classic you, not knowing what you own."
 
-**Pick the most contextually fitting one.** If none fit perfectly, write a fresh one in the same voice. Keep it under 12 words. Never mean, always affectionate.
+Pick the most contextually fitting one. If none fit, write a fresh one in the same voice. Under 12 words. Never mean, always affectionate.
 
 ---
 
-## Step 5 — Verify and Execute the Skill
-
-Before executing, verify the resolved skill path exists:
+## Step 5 — Verify and Execute
 
 ```bash
 SKILL_PATH="<resolved path from Step 2 or Step 3>"
 
-if [ ! -f "$SKILL_PATH" ]; then
-  echo "ERROR: Skill not found at: $SKILL_PATH"
-  echo "The required dependency may not be installed."
-  echo "Check ~/.claude/skills/jarvis/update.log for details."
+if [ -z "$SKILL_PATH" ] || [ ! -f "$SKILL_PATH" ]; then
+  echo "ERROR: Skill not found at: ${SKILL_PATH:-<unresolved>}"
+  echo "Possible causes:"
+  echo "  - Superpowers not installed (run: claude plugin install superpowers@superpowers-dev)"
+  echo "  - GSD not installed (run: npm install -g get-shit-done)"
+  echo "  - Skill was deleted or moved"
+  echo "Check ~/.claude/skills/jarvis/update.log for more details."
   exit 1
 fi
 ```
 
-If the file exists, read the full SKILL.md at the resolved path. Follow its instructions completely as if the user had invoked it directly. Pass the user's original message as `$ARGUMENTS`.
+If the file exists, read it fully and follow its instructions as if the user had invoked it directly. Pass the user's original message as `$ARGUMENTS`.
 
 ---
 
 ## Routing Principles
 
-1. **Broken thing** → Tier 1 always wins, regardless of other signals
-2. **Tier 2 vs Tier 3 conflict** → code/system qualifier present = Tier 2, absent = Tier 3
-3. **Unclear scope** → brainstorm over gsd-quick
-4. **Active .planning/** → prefer GSD
-5. **No .planning/** → prefer Superpowers
-6. **Simple + known** → gsd-quick, no overhead
-7. **Fast-path miss** → trust the description scan
-8. **Superpowers not installed** → skip all `$SUPERPOWERS_BASE` rows, fall through to Step 3
+1. Tier 1 always wins — evaluate it before anything else
+2. Tier 2 vs Tier 3 conflict → code/system qualifier present = Tier 2, absent = Tier 3
+3. Unclear scope → brainstorm over gsd-quick
+4. Active `.planning/` → prefer GSD skills
+5. No `.planning/` → prefer Superpowers skills
+6. Simple + known → gsd-quick, no overhead
+7. Fast-path miss → dynamic discovery
+8. `$SUPERPOWERS_BASE` empty → skip all Superpowers rows, go to Step 3
+9. Step 3 returns nothing → tell the user, stop cleanly
