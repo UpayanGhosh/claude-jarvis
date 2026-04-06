@@ -4,7 +4,7 @@
 const fs   = require("fs");
 const path = require("path");
 const os   = require("os");
-const { execSync, spawnSync } = require("child_process");
+const { spawnSync } = require("child_process");
 
 // ── Guard: only run when installed directly or globally, not as a transitive dep ──
 // npm sets npm_config_global=true for -g installs.
