@@ -30,6 +30,9 @@ jobs:
       - name: Check syntax
         run: node --check install.js && node --check lib/installer.js
 
+      - name: Check version sync
+        run: node scripts/check-version-sync.js
+
       - name: Run tests
         run: npm test
 
