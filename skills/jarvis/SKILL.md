@@ -122,14 +122,15 @@ Use the `AskUserQuestion` tool with:
 
 The tool will return the user's answer in its result. Read that result now.
 
-- If the result contains "Yes" → run the bash block below with `true`
-- If the result contains "No" or anything else → run the bash block below with `false`
+- If the result contains "Yes" → substitute `true` and run the bash block below
+- If the result contains "No" → substitute `false` and run the bash block below
+- If the result is empty, blank, or unclear (user dismissed / no selection captured) → substitute `null` and run the bash block below, then print: "Jarvis didn't catch your answer — I'll ask again next time. Use arrow keys + Enter to select when the prompt appears."
 
-Do NOT use a variable. Do NOT use export. Substitute the literal value `true` or `false` directly into the command before running it:
+Do NOT use a variable. Do NOT use export. Substitute the literal value `true`, `false`, or `null` directly into the command before running it:
 
 ```bash
-# Replace TRUE_OR_FALSE with the literal: true   or   false
-node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:null,last_check:0,deps_asked:false};}c.auto_update=TRUE_OR_FALSE;fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('saved auto_update='+c.auto_update);" 2>>~/.claude/skills/jarvis/update.log
+# Replace TRUE_FALSE_OR_NULL with the literal: true   or   false   or   null
+node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:null,last_check:0,deps_asked:false};}c.auto_update=TRUE_FALSE_OR_NULL;fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('saved auto_update='+c.auto_update);" 2>>~/.claude/skills/jarvis/update.log
 ```
 
 **Stop here. Do not proceed to Step 0d until this bash block has run successfully.**
