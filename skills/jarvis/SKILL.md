@@ -116,32 +116,29 @@ echo "DEPS_ASKED=$DEPS_ASKED"
 
 ### 0a — If `AUTO_UPDATE` is `"null"` (first time ever)
 
-Ask the user using AskUserQuestion:
+Use the `AskUserQuestion` tool with:
 - Question: "Want Jarvis to keep itself, GSD, Superpowers, and gstack automatically up to date?"
 - Options: `["Yes, always auto-update", "No thanks, I'll update manually"]`
 
-Wait for the user's answer. Then write it to config using a single self-contained Node call.
-Replace `YES_OR_NO` below with `true` if the user chose "Yes", `false` if they chose "No":
+The tool will return the user's answer in its result. Read that result now.
+
+- If the result contains "Yes" → run the bash block below with `true`
+- If the result contains "No" or anything else → run the bash block below with `false`
+
+Do NOT use a variable. Do NOT use export. Substitute the literal value `true` or `false` directly into the command before running it:
 
 ```bash
-node -e "
-var fs=require('fs'),path=require('path'),os=require('os');
-var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');
-var config;
-try{config=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){config={auto_update:null,last_check:0,deps_asked:false};}
-config.auto_update=YES_OR_NO;
-fs.writeFileSync(p,JSON.stringify(config,null,2));
-console.log('auto_update saved: '+config.auto_update);
-" 2>>~/.claude/skills/jarvis/update.log
+# Replace TRUE_OR_FALSE with the literal: true   or   false
+node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:null,last_check:0,deps_asked:false};}c.auto_update=TRUE_OR_FALSE;fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('saved auto_update='+c.auto_update);" 2>>~/.claude/skills/jarvis/update.log
 ```
 
-**Important:** Ask this question and wait for the answer BEFORE proceeding to Step 0d. Do not ask both questions at once.
+**Stop here. Do not proceed to Step 0d until this bash block has run successfully.**
 
 ---
 
 ### 0d — If `DEPS_ASKED` is `"false"` (recommended skills not yet offered)
 
-Ask the user using AskUserQuestion:
+Use the `AskUserQuestion` tool with:
 - Question: "Jarvis works best with some recommended skills. Which would you like to install?"
 - Options:
   ```
@@ -154,26 +151,26 @@ Ask the user using AskUserQuestion:
   ]
   ```
 
-Wait for the user's answer. Then run the appropriate installs based on what they chose.
+The tool will return the user's answer in its result. Read that result now. Then run ONLY the install blocks that match what the user chose:
 
-**If they chose "All recommended" or "GSD only":**
+**Run if result contains "All" or "GSD":**
 ```bash
 JARVIS_LOG=~/.claude/skills/jarvis/update.log
 gsd --version 2>/dev/null && echo "GSD already installed" || { npm install -g get-shit-done 2>>"$JARVIS_LOG" && echo "✓ GSD installed" || echo "⚠ GSD install failed — run: npm install -g get-shit-done"; }
 ```
 
-**If they chose "All recommended" or "Superpowers only":**
+**Run if result contains "All" or "Superpowers":**
 ```bash
 JARVIS_LOG=~/.claude/skills/jarvis/update.log
 if claude --version 2>/dev/null; then
   claude plugin marketplace add obra/superpowers 2>>"$JARVIS_LOG" || true
-  claude plugin install superpowers@superpowers-dev 2>>"$JARVIS_LOG" && echo "✓ Superpowers installed" || echo "⚠ Superpowers install failed — run: claude plugin install superpowers@superpowers-dev"
+  claude plugin install superpowers@superpowers-dev 2>>"$JARVIS_LOG" && echo "✓ Superpowers installed" || echo "⚠ Superpowers install failed"
 else
   echo "⚠ Claude Code CLI not found — install it first: https://claude.ai/code"
 fi
 ```
 
-**If they chose "All recommended" or "gstack only":**
+**Run if result contains "All" or "gstack":**
 ```bash
 JARVIS_LOG=~/.claude/skills/jarvis/update.log
 GSTACK_DIR=~/.claude/skills/gstack
@@ -182,26 +179,17 @@ if [ -f "$GSTACK_DIR/setup" ]; then
 elif git --version 2>/dev/null; then
   git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git "$GSTACK_DIR" 2>>"$JARVIS_LOG" \
     && (cd "$GSTACK_DIR" && ./setup 2>>"$JARVIS_LOG") \
-    && echo "✓ gstack installed" \
-    || echo "⚠ gstack install failed — see $JARVIS_LOG"
+    && echo "✓ gstack installed" || echo "⚠ gstack install failed — see $JARVIS_LOG"
 else
-  echo "⚠ git not found — install git first, then: git clone https://github.com/garrytan/gstack.git $GSTACK_DIR && cd $GSTACK_DIR && ./setup"
+  echo "⚠ git not found — install git first"
 fi
 ```
 
-**If they chose "None":** skip all installs above.
+**Run if result contains "None":** skip all install blocks above.
 
-**Always run this after handling the answer** — marks deps as asked so this never fires again:
+**Always run this last — marks deps as asked so this never fires again:**
 ```bash
-node -e "
-var fs=require('fs'),path=require('path'),os=require('os');
-var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');
-var config;
-try{config=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){config={auto_update:null,last_check:0,deps_asked:false};}
-config.deps_asked=true;
-fs.writeFileSync(p,JSON.stringify(config,null,2));
-console.log('deps_asked saved: true');
-" 2>>~/.claude/skills/jarvis/update.log
+node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:false,last_check:0,deps_asked:false};}c.deps_asked=true;fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('saved deps_asked=true');" 2>>~/.claude/skills/jarvis/update.log
 ```
 
 ---

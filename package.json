@@ -1,6 +1,6 @@
 {
   "name": "claude-jarvis",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "Universal intent router for Claude Code — one command that picks the highest-ROI skill automatically",
   "keywords": [
     "claude",
