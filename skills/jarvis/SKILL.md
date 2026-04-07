@@ -116,6 +116,9 @@ echo "DEPS_ASKED=$DEPS_ASKED"
 
 ### 0a — If `AUTO_UPDATE` is `"null"` (first time ever)
 
+**First, output this line to the user before calling the tool:**
+> "Jarvis setup (1/2): Use ↑↓ arrow keys to highlight your choice, then press Enter to confirm."
+
 Use the `AskUserQuestion` tool with:
 - Question: "Want Jarvis to keep itself, GSD, Superpowers, and gstack automatically up to date?"
 - Options: `["Yes, always auto-update", "No thanks, I'll update manually"]`
@@ -139,20 +142,25 @@ node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.j
 
 ### 0d — If `DEPS_ASKED` is `"false"` (recommended skills not yet offered)
 
+**First, output this line to the user before calling the tool:**
+> "Jarvis setup (2/2): Use ↑↓ arrow keys to highlight your choice, then press Enter to confirm."
+
 Use the `AskUserQuestion` tool with:
 - Question: "Jarvis works best with some recommended skills. Which would you like to install?"
-- Options:
+- Options (exactly 4 — do not add more):
   ```
   [
     "All recommended (GSD + Superpowers + gstack)",
     "GSD only (Get Shit Done — task execution)",
     "Superpowers only (advanced Claude Code skills)",
-    "gstack only (git workflow skills)",
     "None — I'll use only what I already have"
   ]
   ```
 
-The tool will return the user's answer in its result. Read that result now. Then run ONLY the install blocks that match what the user chose:
+The tool will return the user's answer in its result. Read that result now.
+
+- If the result is empty, blank, or unclear → print: "Jarvis didn't catch your answer — I'll ask again next time. Use ↑↓ arrow keys + Enter to select." Then **stop Step 0d entirely. Do NOT mark deps_asked as true. Do NOT run any install blocks.**
+- If the result contains a valid selection → run ONLY the install blocks that match what the user chose, then run the "mark deps_asked" block at the end.
 
 **Run if result contains "All" or "GSD":**
 ```bash
@@ -188,7 +196,7 @@ fi
 
 **Run if result contains "None":** skip all install blocks above.
 
-**Always run this last — marks deps as asked so this never fires again:**
+**Run this last ONLY when a valid selection was made — marks deps as asked so this never fires again:**
 ```bash
 node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:false,last_check:0,deps_asked:false};}c.deps_asked=true;fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('saved deps_asked=true');" 2>>~/.claude/skills/jarvis/update.log
 ```
