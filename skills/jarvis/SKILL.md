@@ -53,7 +53,7 @@ var fs=require('fs'),path=require('path'),os=require('os');
 
 // Read and coerce config
 var configPath=path.join(os.homedir(),'.claude','skills','jarvis','config.json');
-var config={auto_update:null,last_check:0};
+var config={auto_update:null,last_check:0,deps_asked:false,pending:null};
 try{config=JSON.parse(fs.readFileSync(configPath,'utf8'));}catch(e){}
 
 var au='null';
@@ -66,6 +66,9 @@ if(typeof config.last_check==='number'&&config.last_check>=0)lc=Math.floor(confi
 
 // deps_asked: whether user has been asked about optional skill installs
 var da=config.deps_asked===true?'true':'false';
+
+// pending: which question is awaiting a text answer from the user
+var pn=config.pending||'none';
 
 // Resolve Superpowers path with proper numeric semver sort
 var spBase='';
@@ -91,6 +94,7 @@ console.log('AUTO_UPDATE='+au);
 console.log('HOURS_SINCE='+hoursSince);
 console.log('SUPERPOWERS_BASE='+spBase);
 console.log('DEPS_ASKED='+da);
+console.log('PENDING='+pn);
 " 2>>"$JARVIS_LOG")
 
 # Parse output
@@ -98,77 +102,114 @@ AUTO_UPDATE=$(echo "$BOOTSTRAP" | grep '^AUTO_UPDATE=' | cut -d= -f2)
 HOURS_SINCE=$(echo "$BOOTSTRAP" | grep '^HOURS_SINCE=' | cut -d= -f2)
 SUPERPOWERS_BASE=$(echo "$BOOTSTRAP" | grep '^SUPERPOWERS_BASE=' | cut -d= -f2-)
 DEPS_ASKED=$(echo "$BOOTSTRAP"     | grep '^DEPS_ASKED='      | cut -d= -f2)
+PENDING=$(echo "$BOOTSTRAP"        | grep '^PENDING='         | cut -d= -f2)
 
 # Fallback if Node.js failed entirely — default to 999 so updates still trigger
 [ -z "$AUTO_UPDATE" ] && AUTO_UPDATE="null"
 [ -z "$HOURS_SINCE" ] && HOURS_SINCE="999"
 [ -z "$DEPS_ASKED"  ] && DEPS_ASKED="false"
+[ -z "$PENDING"     ] && PENDING="none"
 
 echo "AUTO_UPDATE=$AUTO_UPDATE"
 echo "HOURS_SINCE=$HOURS_SINCE"
 echo "SUPERPOWERS_BASE=$SUPERPOWERS_BASE"
 echo "DEPS_ASKED=$DEPS_ASKED"
+echo "PENDING=$PENDING"
 ```
 
-> Capture the output. You will use `AUTO_UPDATE`, `HOURS_SINCE`, `SUPERPOWERS_BASE`, and `DEPS_ASKED` in the blocks below.
+> Capture the output. You will use `AUTO_UPDATE`, `HOURS_SINCE`, `SUPERPOWERS_BASE`, `DEPS_ASKED`, and `PENDING` in the blocks below.
 
 ---
 
-### 0a — If `AUTO_UPDATE` is `"null"` (first time ever)
+### 0 (pre-check) — If `PENDING` is not `"none"` (user was asked a question last run and re-ran /jarvis with their answer)
 
-**First, output this line to the user before calling the tool:**
-> "Jarvis setup (1/2): Use ↑↓ arrow keys to highlight your choice, then press Enter to confirm."
+**Check this BEFORE Steps 0a and 0d. If PENDING is not "none", the user is responding to a previous question — do not route to skill execution yet.**
 
-Use the `AskUserQuestion` tool with:
-- Question: "Want Jarvis to keep itself, GSD, Superpowers, and gstack automatically up to date?"
-- Options: `["Yes, always auto-update", "No thanks, I'll update manually"]`
+The user's answer is in `$ARGUMENTS` (their original message to /jarvis, e.g. "yes", "no", "all", "gsd", "none").
 
-The tool will return the user's answer in its result. Read that result now.
+**If `PENDING` is `"auto_update"`:**
 
-- If the result contains "Yes" → substitute `true` and run the bash block below
-- If the result contains "No" → substitute `false` and run the bash block below
-- If the result is empty, blank, or unclear (user dismissed / no selection captured) → substitute `null` and run the bash block below, then print: "Jarvis didn't catch your answer — I'll ask again next time. Use arrow keys + Enter to select when the prompt appears."
+- Normalize `$ARGUMENTS` to lowercase and check:
+  - Contains "yes" → save `auto_update=true`, clear `pending`
+  - Contains "no" → save `auto_update=false`, clear `pending`
+  - Otherwise → print: `Jarvis setup (1/2): I didn't understand that. Please re-run /jarvis yes or /jarvis no.` Then stop.
 
-Do NOT use a variable. Do NOT use export. Substitute the literal value `true`, `false`, or `null` directly into the command before running it:
+Run this bash block with the literal `true` or `false` substituted for `TRUE_OR_FALSE`:
 
 ```bash
-# Replace TRUE_FALSE_OR_NULL with the literal: true   or   false   or   null
-node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:null,last_check:0,deps_asked:false};}c.auto_update=TRUE_FALSE_OR_NULL;fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('saved auto_update='+c.auto_update);" 2>>~/.claude/skills/jarvis/update.log
+node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:null,last_check:0,deps_asked:false,pending:null};}c.auto_update=TRUE_OR_FALSE;c.pending=null;fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('saved auto_update='+c.auto_update);" 2>>~/.claude/skills/jarvis/update.log
 ```
 
-**Stop here. Do not proceed to Step 0d until this bash block has run successfully.**
+After saving, print: `Got it! Auto-update set to [yes/no]. Continuing setup...`
+
+Then fall through to Step 0d (deps question) if `DEPS_ASKED` is `"false"`, otherwise continue to Step 1.
+
+**If `PENDING` is `"deps"`:**
+
+- Normalize `$ARGUMENTS` to lowercase and check:
+  - Contains "all" → install GSD + Superpowers + gstack (run all three install blocks below)
+  - Contains "gsd" → install GSD only
+  - Contains "superpowers" → install Superpowers only
+  - Contains "gstack" → install gstack only
+  - Contains "none" → skip all installs
+  - Otherwise → print: `Jarvis setup (2/2): I didn't understand that. Please re-run /jarvis with one of: all, gsd, superpowers, gstack, none.` Then stop.
+
+Run the matching install blocks (see Step 0d below), then run the "mark deps_asked" block. Then continue to Step 1.
 
 ---
 
-### 0d — If `DEPS_ASKED` is `"false"` (recommended skills not yet offered)
+### 0a — If `AUTO_UPDATE` is `"null"` (first time ever) and `PENDING` is `"none"`
 
-**First, output this line to the user before calling the tool:**
-> "Jarvis setup (2/2): Use ↑↓ arrow keys to highlight your choice, then press Enter to confirm."
+Save `pending="auto_update"` to config, then print the question as plain text and stop. Do NOT use AskUserQuestion.
 
-Use the `AskUserQuestion` tool with:
-- Question: "Jarvis works best with some recommended skills. Which would you like to install?"
-- Options (exactly 4 — do not add more):
-  ```
-  [
-    "All recommended (GSD + Superpowers + gstack)",
-    "GSD only (Get Shit Done — task execution)",
-    "Superpowers only (advanced Claude Code skills)",
-    "None — I'll use only what I already have"
-  ]
-  ```
+```bash
+node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:null,last_check:0,deps_asked:false,pending:null};}c.pending='auto_update';fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('pending saved');" 2>>~/.claude/skills/jarvis/update.log
+```
 
-The tool will return the user's answer in its result. Read that result now.
+Then output this to the user (as plain text, no tool call):
 
-- If the result is empty, blank, or unclear → print: "Jarvis didn't catch your answer — I'll ask again next time. Use ↑↓ arrow keys + Enter to select." Then **stop Step 0d entirely. Do NOT mark deps_asked as true. Do NOT run any install blocks.**
-- If the result contains a valid selection → run ONLY the install blocks that match what the user chose, then run the "mark deps_asked" block at the end.
+```
+Jarvis setup (1/2): Want Jarvis to keep itself, GSD, Superpowers, and gstack automatically up to date?
 
-**Run if result contains "All" or "GSD":**
+  → Type: /jarvis yes   (auto-update on)
+  → Type: /jarvis no    (manual updates)
+```
+
+**Stop here. Do not proceed further this run.**
+
+---
+
+### 0d — If `DEPS_ASKED` is `"false"` (recommended skills not yet offered) and `PENDING` is `"none"`
+
+Save `pending="deps"` to config, then print the question as plain text and stop. Do NOT use AskUserQuestion.
+
+```bash
+node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:false,last_check:0,deps_asked:false,pending:null};}c.pending='deps';fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('pending saved');" 2>>~/.claude/skills/jarvis/update.log
+```
+
+Then output this to the user (as plain text, no tool call):
+
+```
+Jarvis setup (2/2): Which recommended skills would you like to install?
+
+  → Type: /jarvis all          (GSD + Superpowers + gstack)
+  → Type: /jarvis gsd          (GSD only — task execution)
+  → Type: /jarvis superpowers  (Superpowers only)
+  → Type: /jarvis gstack       (gstack only)
+  → Type: /jarvis none         (skip — use only what I have)
+```
+
+**Stop here. Do not proceed further this run.**
+
+The install blocks (used by the pre-check in Step 0 when PENDING="deps") are:
+
+**Run if answer is "all" or "gsd":**
 ```bash
 JARVIS_LOG=~/.claude/skills/jarvis/update.log
 gsd --version 2>/dev/null && echo "GSD already installed" || { npm install -g get-shit-done 2>>"$JARVIS_LOG" && echo "✓ GSD installed" || echo "⚠ GSD install failed — run: npm install -g get-shit-done"; }
 ```
 
-**Run if result contains "All" or "Superpowers":**
+**Run if answer is "all" or "superpowers":**
 ```bash
 JARVIS_LOG=~/.claude/skills/jarvis/update.log
 if claude --version 2>/dev/null; then
@@ -179,7 +220,7 @@ else
 fi
 ```
 
-**Run if result contains "All" or "gstack":**
+**Run if answer is "all" or "gstack":**
 ```bash
 JARVIS_LOG=~/.claude/skills/jarvis/update.log
 GSTACK_DIR=~/.claude/skills/gstack
@@ -194,11 +235,11 @@ else
 fi
 ```
 
-**Run if result contains "None":** skip all install blocks above.
+**If answer is "none":** skip all install blocks above.
 
 **Run this last ONLY when a valid selection was made — marks deps as asked so this never fires again:**
 ```bash
-node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:false,last_check:0,deps_asked:false};}c.deps_asked=true;fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('saved deps_asked=true');" 2>>~/.claude/skills/jarvis/update.log
+node -e "var fs=require('fs'),path=require('path'),os=require('os');var p=path.join(os.homedir(),'.claude','skills','jarvis','config.json');var c;try{c=JSON.parse(fs.readFileSync(p,'utf8'));}catch(e){c={auto_update:false,last_check:0,deps_asked:false,pending:null};}c.deps_asked=true;c.pending=null;fs.writeFileSync(p,JSON.stringify(c,null,2));console.log('saved deps_asked=true');" 2>>~/.claude/skills/jarvis/update.log
 ```
 
 ---
