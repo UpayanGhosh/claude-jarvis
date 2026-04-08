@@ -3,6 +3,8 @@
 [![CI](https://github.com/UpayanGhosh/claude-jarvis/actions/workflows/ci.yml/badge.svg)](https://github.com/UpayanGhosh/claude-jarvis/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/claude-jarvis)](https://www.npmjs.com/package/claude-jarvis)
 
+![npm stats](assets/npm-stats.jpeg)
+
 > I was too lazy to pick an AI skill. So I built an AI skill that picks AI skills for me.
 
 Hi. I'm a lazy developer.
