@@ -9,7 +9,7 @@
 
 Hi. I'm a lazy developer.
 
-Not "I don't feel like writing tests today" lazy. I mean *pathologically, clinically, aggressively* lazy. I'm so lazy I have a keyboard shortcut to close tabs I don't want to read. I'm so lazy I automated my standup. I'm so lazy that when someone told me there were 50+ Claude Code skills available across GSD, Superpowers, and gstack — skills that could 10x my productivity — my first thought was:
+Not "I don't feel like writing tests today" lazy. I mean *pathologically, clinically, aggressively* lazy. I'm so lazy I have a keyboard shortcut to close tabs I don't want to read. I'm so lazy I automated my standup. I'm so lazy that when someone told me there were 50+ Claude Code skills available across GSD, Superpowers, and gstack (skills that could 10x my productivity), my first thought was:
 
 **"That's too many things to remember."**
 
@@ -19,7 +19,7 @@ It did.
 
 Now I type `/jarvis I want to do this thing` and the correct workflow just... happens. I don't know which skill it used. I don't care. My job is to describe the vibe. Jarvis handles the rest.
 
-And here's the part that genuinely surprised me — it doesn't just know the skills I hardcoded. It scans every single skill installed on your machine and reads the descriptions. Like a human skimming a list. So when you install a new skill tomorrow, Jarvis already knows how to use it. You don't tell it anything. It just figures it out.
+And here's the part that genuinely surprised me: it doesn't just know the skills I hardcoded. It scans every single skill installed on your machine and reads the descriptions. Like a human skimming a list. So when you install a new skill tomorrow, Jarvis already knows how to use it. You don't tell it anything. It just figures it out.
 
 It also keeps itself updated. First time you run it, it asks if you want auto-updates. You say yes. It silently updates itself, GSD, Superpowers, and gstack every 24 hours without you thinking about it ever again. The only thing it can't do is scroll reels for you. Working on it.
 
@@ -33,19 +33,19 @@ You tell it what you want in plain English. It reads your project state, figures
 
 ```
 /jarvis I want to add rate limiting to the API
-→ brainstorm: new feature, scope needs designing first — a feature! wild. let me guess, you thought of this at 11pm.
+→ brainstorm: new feature, scope needs designing first. a feature! wild. let me guess, you thought of this at 11pm.
 
 /jarvis why is memory_engine crashing on startup
-→ systematic-debugging: exception on startup, root cause first — bold move not reading the error message. let's see.
+→ systematic-debugging: exception on startup, root cause first. bold move not reading the error message. let's see.
 
 /jarvis ship this
-→ ship: branch ready, creating PR — either it works or you'll be back in 10 minutes. let's go.
+→ ship: branch ready, creating PR. either it works or you'll be back in 10 minutes. let's go.
 
 /jarvis where are we
-→ gsd-progress: checking project state — let's see how far we've gotten while you were watching reels.
+→ gsd-progress: checking project state. let's see how far we've gotten while you were watching reels.
 
 /jarvis write a LinkedIn carousel about my project
-→ carousel-writer-sms (discovered): writing LinkedIn carousel content — found something you didn't even know you had. you're welcome.
+→ carousel-writer-sms (discovered): writing LinkedIn carousel content. found something you didn't even know you had. you're welcome.
 ```
 
 That's the whole interface. One command. Infinite skills. With light mockery included at no extra charge.
@@ -87,9 +87,9 @@ That's it. That's the whole docs. You're welcome.
 
 Jarvis runs a two-stage routing system:
 
-**Stage 1 — Fast path.** 15 hardcoded high-ROI skills that cover 95% of what developers actually do. Instant match, zero overhead.
+**Stage 1: Fast path.** 15 hardcoded high-ROI skills that cover 95% of what developers actually do. Instant match, zero overhead.
 
-**Stage 2 — Dynamic discovery.** If Stage 1 misses, Jarvis scans every `SKILL.md` in `~/.claude/skills/` and your installed plugins, reads only the `description` field from each one — same way a human skims a list — and picks the best match semantically. When it finds something this way it tells you:
+**Stage 2: Dynamic discovery.** If Stage 1 misses, Jarvis scans every `SKILL.md` in `~/.claude/skills/` and your installed plugins, reads only the `description` field from each one, the same way a human skims a list, and picks the best match semantically. When it finds something this way it tells you:
 
 ```
 → carousel-writer-sms (discovered): writing LinkedIn carousel content
@@ -132,9 +132,9 @@ Look. You installed this because you're lazy. I respect that. We're the same.
 
 But I want you to understand the full magnitude of what you've done. You now have:
 
-- **GSD** — a project orchestration system that manages your entire roadmap, tracks every decision, runs phases in parallel, and remembers everything between sessions. Built by people who think "good enough" is a character flaw.
-- **Superpowers** — an engineering discipline framework that enforces TDD, catches bugs before they compound, runs two-stage code reviews after every task, and physically blocks you from claiming something is done without proof. Built by people who apparently have never cut a corner in their life.
-- **gstack** — a full browser automation, QA, shipping, and monitoring toolkit. Built by people who automate things other people don't even realize can be automated.
+- **GSD**: a project orchestration system that manages your entire roadmap, tracks every decision, runs phases in parallel, and remembers everything between sessions. Built by people who think "good enough" is a character flaw.
+- **Superpowers**: an engineering discipline framework that enforces TDD, catches bugs before they compound, runs two-stage code reviews after every task, and physically blocks you from claiming something is done without proof. Built by people who apparently have never cut a corner in their life.
+- **gstack**: a full browser automation, QA, shipping, and monitoring toolkit. Built by people who automate things other people don't even realize can be automated.
 
 Three of the most powerful AI developer frameworks in existence.
 
@@ -148,7 +148,7 @@ This is peak laziness. I'm proud of us.
 
 ## Built with Synapse
 
-Jarvis was built while working on **[Synapse-OSS](https://github.com/UpayanGhosh/Synapse-OSS)** — an open-source AI personal assistant that evolves with you. Every instance becomes a unique, self-evolving architecture shaped entirely by the person it serves. Persistent memory, hybrid RAG, soul-brain sync, knowledge graph, multi-channel (WhatsApp, Telegram, Discord). The kind of AI assistant that actually knows you.
+Jarvis was built while working on **[Synapse-OSS](https://github.com/UpayanGhosh/Synapse-OSS)**: an open-source AI personal assistant that evolves with you. Every instance becomes a unique, self-evolving architecture shaped entirely by the person it serves. Persistent memory, hybrid RAG, soul-brain sync, knowledge graph, multi-channel (WhatsApp, Telegram, Discord). The kind of AI assistant that actually knows you.
 
 If you like the vibe of Jarvis, you'll like Synapse. Go check it out.
 
@@ -189,4 +189,4 @@ CI runs on every push: Node 18/20/22 test matrix + cross-platform syntax checks 
 
 ## License
 
-MIT. Do whatever. I'm not going to read the PR anyway — Jarvis will review it.
+MIT. Do whatever. I'm not going to read the PR anyway. Jarvis will review it.
